@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <random>
 #include <vector>
+#include <string>
 #include "Genome.h"
 #include "HexGrid.h"
 #include "Organism.h"
@@ -56,6 +57,10 @@
   *                  evaluation order unspecified). std:: distributions are not
   *                  identical across standard libraries, so a seed replays
   *                  identically only for the same compiler + library build.
+  *  I12 Validation. World::validate() is the executable form of this list. It checks
+  *                  I1, I3-I6, I8 (no shared cells), I9 (facing) and I10, plus the
+  *                  `deaths` bookkeeping. Whenever you add or change an invariant
+  *                  here, change validate() in the same commit.
   * =============================================================================
   */
 
@@ -232,4 +237,46 @@ struct World {
      * @warning Do not call spawn() from inside this function (I2).
      */
     void step();
+
+
+    // ---- diagnostics ----
+    /**
+     * @brief Check the whole world against the invariants listed at the top of
+     *        this file. This is the executable form of that list (see I12).
+     * @return An empty string if every check passes. Otherwise a one-line
+     *         description of the FIRST violation found, naming the organism,
+     *         segment, cell and invariant involved.
+     *
+     * Checks, in order:
+     *   A. grid arrays all hold exactly w*h elements
+     *   B. per organism: dead worms hold no body/hp; living worms have a valid
+     *      genome (I10), facing 0..5, body.size() == hp.size() >= 1 and at most
+     *      genome.targetLength (I3); and for every segment: the cell is on the
+     *      grid, no other segment owns it (I3/I8), it is adjacent to the
+     *      previous segment (I3), and the grid agrees with the organism: type ==
+     *      typeAt(i, len) and not empty (I4), orgId == id (I5), hp > 0, and the
+     *      hp mirror matches (I5/I6)
+     *   C. grid sweep: empty cells carry orgId 0 and hp 0, and every occupied
+     *      cell belongs to a living worm's body (no orphan cells) (I5/I6)
+     *   D. bookkeeping: `deaths` equals the number of dead organisms
+     *
+     * Not checked (cannot be seen from the data): I2 pointer lifetimes, I7 phase
+     * discipline, I9 for code paths that never store a direction, and I11 RNG
+     * discipline.
+     *
+     * Cost: O(w*h + total body length), plus one w*h allocation per call. Cheap
+     * enough to run every tick in debug builds on grids of this size.
+     * Called by: main (debug builds, after every change to the world) and the
+     * headless test project. Calls: HexGrid::neighbor, Genome::typeAt.
+     * @note Corruption usually breaks several rules at once. Only the first one
+     *       found is reported, in the order above and by organism index, so the
+     *       message may describe a symptom rather than the root cause. Fix it
+     *       and run again.
+     * @note const and RNG-free: calling it never changes the simulation. A run
+     *       with validation on is identical to one with it off.
+     * @warning Keep this function in step with the invariants block. When an
+     *          invariant is added or changed, change the matching check in the
+     *          same commit; a stale validator is worse than none.
+     */
+    std::string validate() const;
 };
