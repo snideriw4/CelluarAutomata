@@ -24,6 +24,7 @@
 #include "Genome.h"
 #include "Organism.h"
 #include "World.h"
+#include "Render.h"
 
 // ------------------------------------------------------------ Cell types --
 static const Color TYPE_COLOR[T_COUNT] = {
@@ -36,52 +37,7 @@ static const Color TYPE_COLOR[T_COUNT] = {
     { 170,  90, 220, 255 },  // tail
 };
 
-// -------------------------------------------------------------- Geometry --
-constexpr float SQRT3 = 1.7320508f;
-
-/**
- * @brief Maps between grid cells and world-space (pre-camera) coordinates.
- *
- * Pointy-top hexes with circumradius R (center to corner), odd-r offset.
- * @warning center() and pixelToCell() are inverses and assume this exact
- *          orientation. Changing orientation means changing both together
- *          (and the DIRS table and the rotation passed to DrawPoly).
- */
-struct HexLayout {
-    float R = 12.0f;
-
-    /** @brief World-space center of the hex at (col, row). */
-    Vector2 center(int col, int row) const {
-        return { SQRT3 * R * (col + 0.5f * (row & 1)), 1.5f * R * row };
-    }
-
-    /**
-     * @brief Find which hex contains world-space point `p`.
-     * @param p   Point in world space (already passed through the camera inverse).
-     * @param col Output column (may be negative or past the grid).
-     * @param row Output row (may be negative or past the grid).
-     * Method: pixel -> fractional axial -> cube rounding -> odd-r offset.
-     * @warning The outputs are NOT clamped. Always check HexGrid::inBounds()
-     *          before using them as indices.
-     * Called by: main (hover and click-to-spawn).
-     */
-    void pixelToCell(Vector2 p, int& col, int& row) const {
-        float q = (SQRT3 / 3.0f * p.x - 1.0f / 3.0f * p.y) / R;
-        float r = (2.0f / 3.0f * p.y) / R;
-        float x = q, z = r, y = -x - z;
-        float rx = std::round(x), ry = std::round(y), rz = std::round(z);
-        float dx = std::fabs(rx - x), dy = std::fabs(ry - y), dz = std::fabs(rz - z);
-        if (dx > dy && dx > dz) rx = -ry - rz;
-        else if (dy > dz)       ry = -rx - rz;
-        else                    rz = -rx - ry;
-        int aq = int(rx), ar = int(rz);
-        row = ar;
-        col = aq + (ar - (ar & 1)) / 2;
-    }
-};
-
 // --------------------------------------------------------------- Drawing --
-enum ViewMode { VIEW_TYPE = 0, VIEW_ORGANISM, VIEW_HEALTH, VIEW_COUNT };
 
 /**
  * @brief Color for one cell under the current view mode.

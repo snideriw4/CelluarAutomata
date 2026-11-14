@@ -151,6 +151,7 @@
     <ClInclude Include="Genome.h" />
     <ClInclude Include="HexGrid.h" />
     <ClInclude Include="Organism.h" />
+    <ClInclude Include="Render.h" />
     <ClInclude Include="Tuning.h" />
     <ClInclude Include="World.h" />
   </ItemGroup>
