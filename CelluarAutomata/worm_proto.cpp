@@ -394,10 +394,26 @@ struct World {
         return true;
     }
 
+    /**
+     * @brief Try to spawn up to `count` single-cell worms at random empty cells.
+     * @param count Desired number of new worms.
+     *
+     * Makes at most count * 20 attempts, so it may spawn fewer than `count`
+     * when the grid is crowded. The cell and the genome are drawn in separate
+     * statements so the RNG draw order is defined (see I11).
+     *
+     * Called by: main (S key). Calls: Genome::random, spawn.
+     * @warning May reallocate `orgs` (I2); never call during step().
+     * @note For a given seed this produces a different layout than the old
+     *       version did. That is expected, because the draw order is now fixed.
+     */
     void spawnRandom(int count) {
         int total = grid.w * grid.h;
-        for (int tries = 0, made = 0; made < count && tries < count * 20; ++tries)
-            if (spawn(int(rng() % total), Genome::random(rng))) ++made;
+        for (int tries = 0, made = 0; made < count && tries < count * 20; ++tries) {
+            int cell = int(rng() % total);   // draw 1: where
+            Genome g = Genome::random(rng);  // draw 2: what
+            if (spawn(cell, g)) ++made;
+        }
     }
 
     /**
