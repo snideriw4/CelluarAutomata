@@ -19,6 +19,7 @@
 
 // Dependencies: CellType.h, Tuning.h, HexGrid.h, Genome, World, Render.
 #include "CellType.h"
+#include "Tuning.h"
 
 /*
  * =============================================================================
@@ -75,28 +76,6 @@ static const Color TYPE_COLOR[T_COUNT] = {
     { 230,  70,  70, 255 },  // offense
     { 170,  90, 220, 255 },  // tail
 };
-
-// ---------------------------------------------------------------- Tuning --
-/**
- * @brief Central tuning constants. Change balance numbers here, not in logic.
- *
- * @note SEGMENT_HP is also the full-scale value for the health view (cellColor).
- * @warning ATTACK[] and DEFENSE[] are indexed by CellType and declared with
- *          size T_COUNT. If you add a cell type to the enum, add an entry at
- *          the matching position in BOTH tables and in TYPE_COLOR[]. The
- *          compiler will NOT catch a missing entry: omitted initializers
- *          silently become 0 (or a black color).
- */
-namespace Tune {
-    constexpr int   SEGMENT_HP = 10;     // hit points per segment
-    constexpr float SIZE_BONUS = 4.0f;   // contest bonus = SIZE_BONUS / bodyLength
-    constexpr float JITTER = 0.5f;   // random 0..JITTER added to each contest score
-
-    // Collision power contributed by each segment, indexed by CellType.
-    //                                    EMPTY HEAD MOVER STOR DEF OFF TAIL
-    constexpr int ATTACK[T_COUNT] = { 0,   0,   0,    0,   0,  2,  0 };
-    constexpr int DEFENSE[T_COUNT] = { 0,   0,   0,    0,   1,  0,  0 };
-}
 
 // ------------------------------------------------------------------ Grid --
 // Directions, counter-clockwise from east: 0=E 1=NE 2=NW 3=W 4=SW 5=SE

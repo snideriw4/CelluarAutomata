@@ -26,5 +26,8 @@
     <ClInclude Include="CellType.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Tuning.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
