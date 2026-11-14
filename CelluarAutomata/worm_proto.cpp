@@ -17,6 +17,9 @@
 #include <random>
 #include <vector>
 
+// Dependencies: CellType.h, Tuning.h, HexGrid.h, Genome, World, Render.
+#include "CellType.h"
+
 /*
  * =============================================================================
  *  PROJECT INVARIANTS -- read before changing anything in World / Organism
@@ -63,10 +66,6 @@
  */
 
 // ------------------------------------------------------------ Cell types --
-enum CellType : uint8_t {
-    T_EMPTY = 0, T_HEAD, T_MOVER, T_STORAGE, T_DEFENSE, T_OFFENSE, T_TAIL, T_COUNT
-};
-
 static const Color TYPE_COLOR[T_COUNT] = {
     { 30,  30,  38, 255 },  // empty
     { 245, 245, 245, 255 },  // head
