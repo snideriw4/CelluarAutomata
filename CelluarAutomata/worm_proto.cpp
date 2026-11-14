@@ -17,7 +17,7 @@
 #include <random>
 #include <vector>
 
-// Dependencies: CellType.h, Tuning.h, HexGrid.h, Genome, World, Render.
+// Dependencies
 #include "CellType.h"
 #include "Tuning.h"
 #include "HexGrid.h"
@@ -26,65 +26,6 @@
 #include "World.h"
 #include "Render.h"
 
-// ------------------------------------------------------------ Cell types --
-static const Color TYPE_COLOR[T_COUNT] = {
-    { 30,  30,  38, 255 },  // empty
-    { 245, 245, 245, 255 },  // head
-    { 240, 160,  50, 255 },  // mover
-    { 240, 230,  80, 255 },  // storage
-    { 70, 150, 230, 255 },  // defense
-    { 230,  70,  70, 255 },  // offense
-    { 170,  90, 220, 255 },  // tail
-};
-
-// --------------------------------------------------------------- Drawing --
-
-/**
- * @brief Color for one cell under the current view mode.
- * @param g    Grid to read (read-only).
- * @param i    Flat cell index.
- * @param view VIEW_TYPE, VIEW_ORGANISM, or VIEW_HEALTH.
- * Empty cells are always the empty color. Organism view hashes orgId to a hue
- * (golden-angle spread); health view maps hp / SEGMENT_HP to red..green.
- * @note Reads grid.hp, which is only a mirror (I6). It is correct as of the
- *       last retype() and is for display only.
- * Called by: drawGrid.
- */
-Color cellColor(const HexGrid& g, int i, int view) {
-    uint8_t t = g.type[i];
-    if (t == T_EMPTY) return TYPE_COLOR[T_EMPTY];
-    switch (view) {
-    case VIEW_ORGANISM: {
-        float hue = std::fmod(float(g.orgId[i]) * 137.5f, 360.0f);
-        return ColorFromHSV(hue, t == T_HEAD ? 0.25f : 0.65f, 0.95f);
-    }
-    case VIEW_HEALTH: {
-        float frac = std::clamp(float(g.hp[i]) / float(Tune::SEGMENT_HP), 0.0f, 1.0f);
-        return ColorFromHSV(120.0f * frac, 0.85f, 0.9f);      // red (hurt) -> green (healthy)
-    }
-    default:
-        return TYPE_COLOR[t];
-    }
-}
-
-/**
- * @brief Draw every cell as a filled hex (one DrawPoly per cell per frame).
- * @param outlines Draw cell outlines too (main passes zoom > 0.6).
- * @note O(w*h) draw calls. Fine at this size; this is the first thing to
- *       replace with a single mesh/texture if the grid gets large.
- * Must be called between BeginMode2D and EndMode2D.
- */
-void drawGrid(const HexGrid& g, const HexLayout& L, bool outlines, int view) {
-    for (int r = 0; r < g.h; ++r) {
-        for (int c = 0; c < g.w; ++c) {
-            Vector2 ctr = L.center(c, r);
-            DrawPoly(ctr, 6, L.R, 30.0f, cellColor(g, g.idx(c, r), view));
-            if (outlines) DrawPolyLines(ctr, 6, L.R, 30.0f, Fade(BLACK, 0.5f));
-        }
-    }
-}
-
-// ------------------------------------------------------------------ Main --
 int main() {
     InitWindow(1280, 800, "Hex worm prototype");
     SetTargetFPS(60);

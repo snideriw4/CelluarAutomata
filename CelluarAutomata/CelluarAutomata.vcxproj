@@ -140,6 +140,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Genome.cpp" />
+    <ClCompile Include="Render.cpp" />
     <ClCompile Include="World.cpp" />
     <ClCompile Include="worm_proto.cpp" />
   </ItemGroup>

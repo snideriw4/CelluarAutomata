@@ -15,7 +15,7 @@
  * @note ATTACK[] and DEFENSE[] are indexed by CellType, one entry per type in
  *       enum order. They have no explicit size and are checked by static_assert,
  *       so adding a CellType without extending both tables is a compile error.
- *       (TYPE_COLOR[] in the render layer is not covered by this check yet.)
+ *       TYPE_COLOR[] in Render.cpp is checked the same way.
  */
 namespace Tune {
     inline constexpr int   SEGMENT_HP = 10;     // hit points per segment

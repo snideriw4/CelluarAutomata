@@ -63,3 +63,25 @@ struct HexLayout {
  *          cellColor() (Render.cpp) and its name in VIEW_NAMES[] in main.
  */
 enum ViewMode { VIEW_TYPE = 0, VIEW_ORGANISM, VIEW_HEALTH, VIEW_COUNT };
+
+/**
+ * @brief Color for one cell under the current view mode.
+ * @param g    Grid to read (read-only).
+ * @param i    Flat cell index.
+ * @param view VIEW_TYPE, VIEW_ORGANISM, or VIEW_HEALTH.
+ * Empty cells are always the empty color. Organism view hashes orgId to a hue
+ * (golden-angle spread); health view maps hp / SEGMENT_HP to red..green.
+ * @note Reads grid.hp, which is only a mirror (I6). It is correct as of the
+ *       last retype() and is for display only.
+ * Called by: drawGrid.
+ */
+Color cellColor(const HexGrid& g, int i, int view);
+
+/**
+ * @brief Draw every cell as a filled hex (one DrawPoly per cell per frame).
+ * @param outlines Draw cell outlines too (main passes zoom > 0.6).
+ * @note O(w*h) draw calls. Fine at this size; this is the first thing to
+ *       replace with a single mesh/texture if the grid gets large.
+ * Must be called between BeginMode2D and EndMode2D.
+ */
+void drawGrid(const HexGrid& g, const HexLayout& L, bool outlines, int view);
