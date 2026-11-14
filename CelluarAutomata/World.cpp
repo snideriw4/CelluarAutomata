@@ -33,3 +33,24 @@ void World::kill(Organism& o) {
     o.alive = false;
     ++deaths;
 }
+
+bool World::spawn(int cellIdx, const Genome& g) {
+    if (grid.type[cellIdx] != T_EMPTY) return false;
+    Organism o;
+    o.genome = g;
+    o.facing = int(rng() % 6);
+    o.body.push_back(cellIdx);
+    o.hp.assign(1, Tune::SEGMENT_HP);
+    orgs.push_back(o);
+    retype(orgs.back(), uint32_t(orgs.size()));
+    return true;
+}
+
+void World::spawnRandom(int count) {
+    int total = grid.w * grid.h;
+    for (int tries = 0, made = 0; made < count && tries < count * 20; ++tries) {
+        int cell = int(rng() % total);   // draw 1: where
+        Genome g = Genome::random(rng);  // draw 2: what
+        if (spawn(cell, g)) ++made;
+    }
+}

@@ -134,6 +134,18 @@ struct World {
     int defensePower(const Organism& o) const;
 
     /**
+     * @brief Remove a worm from the world.
+     * @param o The organism to kill. Must be alive with a valid body.
+     * @post All its cells are cleared on the grid, body and hp are emptied,
+     *       alive = false, and `deaths` is incremented.
+     * Called by: step (when head HP reaches 0).
+     * @note The slot stays in World::orgs (I1), so memory use grows with total
+     *       organisms ever born. Dead organisms must be skipped by any code
+     *       that touches body.front() (it is empty).
+     */
+    void kill(Organism& o);
+
+    /**
      * @brief Create a single-cell worm at `cellIdx`.
      * @param cellIdx Flat grid index. Must be in range [0, w*h); not checked.
      * @param g       Genome to give the newborn.
@@ -144,17 +156,7 @@ struct World {
      * @warning May reallocate `orgs`, invalidating Organism references (I2).
      *          Never call during step().
      */
-    bool spawn(int cellIdx, const Genome& g) {
-        if (grid.type[cellIdx] != T_EMPTY) return false;
-        Organism o;
-        o.genome = g;
-        o.facing = int(rng() % 6);
-        o.body.push_back(cellIdx);
-        o.hp.assign(1, Tune::SEGMENT_HP);
-        orgs.push_back(o);
-        retype(orgs.back(), uint32_t(orgs.size()));
-        return true;
-    }
+    bool spawn(int cellIdx, const Genome& g);
 
     /**
      * @brief Try to spawn up to `count` single-cell worms at random empty cells.
@@ -169,26 +171,7 @@ struct World {
      * @note For a given seed this produces a different layout than the old
      *       version did. That is expected, because the draw order is now fixed.
      */
-    void spawnRandom(int count) {
-        int total = grid.w * grid.h;
-        for (int tries = 0, made = 0; made < count && tries < count * 20; ++tries) {
-            int cell = int(rng() % total);   // draw 1: where
-            Genome g = Genome::random(rng);  // draw 2: what
-            if (spawn(cell, g)) ++made;
-        }
-    }
-
-    /**
-     * @brief Remove a worm from the world.
-     * @param o The organism to kill. Must be alive with a valid body.
-     * @post All its cells are cleared on the grid, body and hp are emptied,
-     *       alive = false, and `deaths` is incremented.
-     * Called by: step (when head HP reaches 0).
-     * @note The slot stays in World::orgs (I1), so memory use grows with total
-     *       organisms ever born. Dead organisms must be skipped by any code
-     *       that touches body.front() (it is empty).
-     */
-    void kill(Organism& o);
+    void spawnRandom(int count);
 
     // ---- phase 1: DECIDE (reads the grid, mutates nothing but the RNG) ----
     /**
