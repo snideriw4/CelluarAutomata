@@ -113,14 +113,7 @@ struct World {
      * Called by: spawn, applyMove, step (after non-lethal damage).
      * @warning Does not clear cells the body no longer occupies (I5).
      */
-    void retype(const Organism& o, uint32_t id) {
-        int len = int(o.body.size());
-        for (int i = 0; i < len; ++i) {
-            grid.type[o.body[i]] = o.genome.typeAt(i, len);
-            grid.orgId[o.body[i]] = id;
-            grid.hp[o.body[i]] = uint8_t(std::clamp(o.hp[i], 0, 255));
-        }
-    }
+    void retype(const Organism& o, uint32_t id);
 
     /**
      * @brief Total collision attack of a worm: the sum of Tune::ATTACK over
@@ -129,11 +122,8 @@ struct World {
      * Called by: step (RESOLVE phase, on contest losers).
      * @note Whole-body for now; position along the body is ignored.
      */
-    int attackPower(const Organism& o) const {
-        int len = int(o.body.size()), sum = 0;
-        for (int i = 0; i < len; ++i) sum += Tune::ATTACK[o.genome.typeAt(i, len)];
-        return sum;
-    }
+    int attackPower(const Organism& o) const;
+
     /**
      * @brief Total collision defense of a worm: the sum of Tune::DEFENSE over
      *        every segment's current type.
@@ -141,11 +131,7 @@ struct World {
      * Called by: step (RESOLVE phase, on the contest winner).
      * @note Whole-body for now; position along the body is ignored.
      */
-    int defensePower(const Organism& o) const {
-        int len = int(o.body.size()), sum = 0;
-        for (int i = 0; i < len; ++i) sum += Tune::DEFENSE[o.genome.typeAt(i, len)];
-        return sum;
-    }
+    int defensePower(const Organism& o) const;
 
     /**
      * @brief Create a single-cell worm at `cellIdx`.
@@ -202,13 +188,7 @@ struct World {
      *       organisms ever born. Dead organisms must be skipped by any code
      *       that touches body.front() (it is empty).
      */
-    void kill(Organism& o) {
-        for (int c : o.body) grid.clearCell(c);
-        o.body.clear();
-        o.hp.clear();
-        o.alive = false;
-        ++deaths;
-    }
+    void kill(Organism& o);
 
     // ---- phase 1: DECIDE (reads the grid, mutates nothing but the RNG) ----
     /**
