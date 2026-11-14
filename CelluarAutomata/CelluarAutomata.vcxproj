@@ -139,6 +139,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Genome.cpp" />
     <ClCompile Include="worm_proto.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -146,6 +147,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CellType.h" />
+    <ClInclude Include="Genome.h" />
     <ClInclude Include="HexGrid.h" />
     <ClInclude Include="Tuning.h" />
   </ItemGroup>
