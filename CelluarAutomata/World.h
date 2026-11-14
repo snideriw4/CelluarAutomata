@@ -7,14 +7,12 @@
  * Used by: the driver (main) and the render layer (read-only).
  * Implementation: World.cpp (clear, aliveCount and the constructor stay inline).
  */
-#include <algorithm>
 #include <cstdint>
 #include <random>
 #include <vector>
 #include "Genome.h"
 #include "HexGrid.h"
 #include "Organism.h"
-#include "Tuning.h"
 
  /*
   * =============================================================================

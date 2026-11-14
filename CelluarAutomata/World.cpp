@@ -5,6 +5,9 @@
  */
 #include "World.h"
 
+#include <algorithm>   // std::sort, std::max, std::clamp
+#include "Tuning.h"    // Tune::SEGMENT_HP, SIZE_BONUS, JITTER, ATTACK, DEFENSE
+
 void World::retype(const Organism& o, uint32_t id) {
     int len = int(o.body.size());
     for (int i = 0; i < len; ++i) {
