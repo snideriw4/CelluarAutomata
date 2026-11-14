@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="CelluarAutomata/CelluarAutomata.vcxproj" Id="ee9f1a1f-4f57-461c-9dab-37e21b7b9f88" />
+</Solution>
