@@ -4,8 +4,7 @@
  * @brief Per-worm live state (Organism) and the move request type (Intent).
  * Dependencies: Genome.h (Organism holds a Genome by value).
  * Used by: World. Plain data only; all behavior lives in World (World.h/.cpp).
- * @note The invariants tying Organism to the grid (I1-I6) are documented at the
- *       top of World.h once Step 6 is done; until then, in the driver.
+ * @note The invariants tying Organism to the grid (I1-I6) are documented at the top of World.h
  */
 #include <cstdint>
 #include <deque>
