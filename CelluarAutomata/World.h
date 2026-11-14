@@ -192,34 +192,7 @@ struct World {
      * @pre  o.body is non-empty (front() is used).
      * @post out.target is empty in the snapshot (I8).
      */
-    bool decide(const Organism& o, uint32_t id, Intent& out) {
-        const Genome& g = o.genome;
-        int head = o.body.front();
-
-        double w[6];
-        int target[6];
-        double sum = 0.0;
-        for (int rel = 0; rel < 6; ++rel) {
-            int n = grid.neighbor(head, (o.facing + rel) % 6);
-            target[rel] = n;
-            bool free = (n >= 0 && grid.type[n] == T_EMPTY);
-            w[rel] = free ? double(g.moveWeight[rel]) : 0.0;
-            sum += w[rel];
-        }
-        if (sum <= 0.0) return false;                      // boxed in
-
-        std::discrete_distribution<int> pick(w, w + 6);
-        int rel = pick(rng);
-
-        std::uniform_real_distribution<float> u01(0.0f, 1.0f);
-        out.id = id;
-        out.rel = rel;
-        out.target = target[rel];
-        out.score = g.agility
-            + Tune::SIZE_BONUS / float(o.body.size())   // smaller worms get a bonus
-            + Tune::JITTER * u01(rng);
-        return true;
-    }
+    bool decide(const Organism& o, uint32_t id, Intent& out);
 
     // ---- phase 3 helper: perform an (already approved) move ----
     /**
@@ -239,21 +212,7 @@ struct World {
      * Called by: step (APPLY). Calls: HexGrid::clearCell, retype.
      * @warning Only valid for intents that won RESOLVE (see I8).
      */
-    void applyMove(Organism& o, uint32_t id, const Intent& in) {
-        bool grow = int(o.body.size()) < o.genome.targetLength
-            && (tick % o.genome.growInterval == 0);
-
-        o.body.push_front(in.target);
-        o.facing = (o.facing + in.rel) % 6;
-        if (grow) {
-            o.hp.push_back(Tune::SEGMENT_HP);       // new segment appended at the tail end
-        }
-        else {
-            grid.clearCell(o.body.back());
-            o.body.pop_back();
-        }
-        retype(o, id);
-    }
+    void applyMove(Organism& o, uint32_t id, const Intent& in);
 
     /**
      * @brief Advance the world by one tick.
@@ -274,52 +233,5 @@ struct World {
      * defensePower, applyMove, kill, retype.
      * @warning Do not call spawn() from inside this function (I2).
      */
-    void step() {
-        // 1. DECIDE: every living worm proposes a move from the same snapshot.
-        intents.clear();
-        for (size_t i = 0; i < orgs.size(); ++i) {
-            Intent in;
-            if (orgs[i].alive && decide(orgs[i], uint32_t(i + 1), in)) intents.push_back(in);
-        }
-
-        // 2. RESOLVE: group intents by target cell, pick one winner per cell.
-        std::sort(intents.begin(), intents.end(), [](const Intent& a, const Intent& b) {
-            return a.target != b.target ? a.target < b.target : a.id < b.id;
-            });
-
-        winners.clear();
-        damage.assign(orgs.size() + 1, 0);
-        for (size_t a = 0; a < intents.size();) {
-            size_t b = a;
-            while (b < intents.size() && intents[b].target == intents[a].target) ++b;
-
-            size_t win = a;
-            for (size_t k = a + 1; k < b; ++k)
-                if (intents[k].score > intents[win].score) win = k;
-
-            if (b - a > 1) {
-                ++contests;
-                // Every loser's collision may hurt the winner's head.
-                int winnerDef = defensePower(orgs[intents[win].id - 1]);
-                for (size_t k = a; k < b; ++k) {
-                    if (k == win) continue;
-                    int atk = attackPower(orgs[intents[k].id - 1]);
-                    damage[intents[win].id] += std::max(0, atk - winnerDef);
-                }
-            }
-            winners.push_back(intents[win]);
-            a = b;
-        }
-
-        // 3. APPLY: winners move, then collision damage lands, then deaths.
-        for (const Intent& in : winners) applyMove(orgs[in.id - 1], in.id, in);
-
-        for (size_t i = 0; i < orgs.size(); ++i) {
-            if (!orgs[i].alive || damage[i + 1] <= 0) continue;
-            orgs[i].hp[0] -= damage[i + 1];
-            if (orgs[i].hp[0] <= 0) kill(orgs[i]);      // head destroyed = organism dies (for now)
-            else                    retype(orgs[i], uint32_t(i + 1));
-        }
-        ++tick;
-    }
+    void step();
 };
