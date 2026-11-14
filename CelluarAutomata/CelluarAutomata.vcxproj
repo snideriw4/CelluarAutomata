@@ -139,11 +139,22 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="test.cpp" />
-    <ClCompile Include="worm_proto.cpp" />
+    <ClCompile Include="Genome.cpp" />
+    <ClCompile Include="Render.cpp" />
+    <ClCompile Include="World.cpp" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CellType.h" />
+    <ClInclude Include="Genome.h" />
+    <ClInclude Include="HexGrid.h" />
+    <ClInclude Include="Organism.h" />
+    <ClInclude Include="Render.h" />
+    <ClInclude Include="Tuning.h" />
+    <ClInclude Include="World.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
