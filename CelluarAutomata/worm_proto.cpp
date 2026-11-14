@@ -1,31 +1,57 @@
-// Hex-grid worm prototype v2 (raylib): intent / resolve / apply ticks.
-// Pointy-top hexes, odd-r offset storage.
-//
-// Controls
-//   Left click   : spawn a single-cell baby (random genome) on an empty cell
-//   S            : spawn 20 random babies (good for stress-testing contests)
-//   Right drag   : pan          Mouse wheel : zoom
-//   SPACE        : pause/resume Up/Down     : sim speed
-//   TAB          : cycle view: cell type -> organism -> head/segment health
-//   R            : clear world
+/**
+ * @file main.cpp
+ * @brief Driver: window, input, camera, fixed-timestep loop, and HUD.
+ *
+ * MODULE MAP
+ *   Simulation (no raylib; must stay buildable and testable without graphics)
+ *     CellType.h        enum of cell kinds
+ *     Tuning.h          balance constants (namespace Tune)
+ *     HexGrid.h         flat structure-of-arrays grid + neighbor table
+ *     Genome.h/.cpp     heritable body plan and behavior parameters
+ *     Organism.h        per-worm state, Intent (a proposed move)
+ *     World.h/.cpp      invariants I1-I11 and the tick pipeline
+ *                       (DECIDE -> RESOLVE -> APPLY)
+ *   Presentation (the only code allowed to include raylib.h)
+ *     Render.h/.cpp     hex geometry, colors, view modes, drawing
+ *     main.cpp          this file
+ *
+ * LAYERING RULES
+ *   - Simulation files never include raylib.h or Render.h.
+ *   - The render layer reads the grid; it never mutates the World.
+ *   - World state changes only through World::step(), spawn(), spawnRandom()
+ *     and clear(), called from the driver and never while drawing.
+ */
+
+/*
+*   Controls
+*        Left click   : spawn a single-cell baby (random genome) on an empty cell
+*        S            : spawn 20 random babies (good for stress-testing contests)
+*        Right drag   : pan          Mouse wheel : zoom
+*        SPACE        : pause/resume Up/Down     : sim speed
+*        TAB          : cycle view: cell type -> organism -> head/segment health
+*        R            : clear world
+*/
 
 #include "raylib.h"
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <deque>
-#include <random>
-#include <vector>
+#include <algorithm>   // std::min, std::max
 
-// Dependencies
-#include "CellType.h"
-#include "Tuning.h"
-#include "HexGrid.h"
-#include "Genome.h"
-#include "Organism.h"
-#include "World.h"
-#include "Render.h"
+#include "Genome.h"     // Genome::random (click-to-spawn)
+#include "Render.h"     // HexLayout, ViewMode, drawGrid
+#include "World.h"      // World
 
+/**
+ * @brief Program entry: creates the window and world, then runs the main loop.
+ *
+ * Each frame: (1) read input; update the camera and the hover cell; (2) advance
+ * the simulation with a fixed-timestep accumulator (ticksPerSec ticks per
+ * second, at most 20 catch-up ticks per frame); (3) draw the grid and HUD.
+ *
+ * Reads/writes: World (spawn, spawnRandom, clear, step), Camera2D.
+ * Calls: HexLayout::pixelToCell/center, drawGrid, raylib input/draw functions.
+ * @note Simulation speed is independent of frame rate. Drawing never changes
+ *       the world.
+ * @warning VIEW_NAMES[] below must list one name per ViewMode, in enum order.
+ */
 int main() {
     InitWindow(1280, 800, "Hex worm prototype");
     SetTargetFPS(60);
