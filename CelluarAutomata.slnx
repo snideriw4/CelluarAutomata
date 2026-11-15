@@ -4,4 +4,5 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="CelluarAutomata/CelluarAutomata.vcxproj" Id="ee9f1a1f-4f57-461c-9dab-37e21b7b9f88" />
+  <Project Path="SimTests/SimTests.vcxproj" Id="7482238f-7e50-4897-b7fa-2839fdf99073" />
 </Solution>
