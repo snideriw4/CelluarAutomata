@@ -205,7 +205,8 @@ std::string World::validate() const {
 
     // ---- A. grid arrays ----
     if (cells <= 0 || grid.type.size() != size_t(cells) ||
-        grid.orgId.size() != size_t(cells) || grid.hp.size() != size_t(cells))
+        grid.orgId.size() != size_t(cells) || grid.hp.size() != size_t(cells) ||
+        grid.food.size() != size_t(cells))
         return "grid arrays do not all have exactly w*h elements";
 
     // ---- B. organisms (also records which organism owns each cell) ----
@@ -221,6 +222,8 @@ std::string World::validate() const {
             ++deadCount;
             if (!o.body.empty() || !o.hp.empty())
                 return who + " is dead but still has body/hp entries (I1/I3)";
+            if (o.energy != 0)
+                return who + " is dead but still holds energy " + std::to_string(o.energy) + " (I13)";
             continue;
         }
 
@@ -280,11 +283,22 @@ std::string World::validate() const {
                 return seg + " at " + cellStr(c) + ": grid hp mirror is " +
                 std::to_string(int(grid.hp[size_t(c)])) + " but segment hp is " +
                 std::to_string(o.hp[size_t(i)]) + " (I5/I6)";
+
+            // Energy pool (I13). Checked AFTER the segment loop because energyCapacity()
+            // indexes Tune::CAPACITY by segment type, which is only safe once every type
+            // has been validated above.
+            const int capacity = energyCapacity(o);
+            if (o.energy < 1 || o.energy > capacity)
+                return who + ": energy " + std::to_string(o.energy) + " is outside 1.." +
+                std::to_string(capacity) + " (I13)";
         }
     }
 
     // ---- C. grid sweep ----
     for (int i = 0; i < cells; ++i) {
+        if (grid.food[size_t(i)] > Tune::FOOD_MAX)
+            return cellStr(i) + " holds food " + std::to_string(int(grid.food[size_t(i)])) +
+            ", above FOOD_MAX " + std::to_string(Tune::FOOD_MAX) + " (I14)";
         if (grid.type[size_t(i)] == T_EMPTY) {
             if (grid.orgId[size_t(i)] != 0 || grid.hp[size_t(i)] != 0)
                 return cellStr(i) + " is empty but has stale orgId/hp (I5)";
@@ -299,6 +313,15 @@ std::string World::validate() const {
     if (uint64_t(deadCount) != deaths)
         return "deaths counter is " + std::to_string(deaths) +
         " but the number of dead organisms is " + std::to_string(deadCount);
+
+    // ---- E. energy ledger (I15) ----
+    if (energyIn < 0 || energyOut < 0)
+        return "energy ledger counters are negative (in " + std::to_string(energyIn) +
+        ", out " + std::to_string(energyOut) + ") (I15)";
+    const int64_t held = totalEnergy();
+    if (held != energyIn - energyOut)
+        return "energy ledger broken: the world holds " + std::to_string(held) +
+        " but energyIn - energyOut is " + std::to_string(energyIn - energyOut) + " (I15)";
 
     return std::string();
 }

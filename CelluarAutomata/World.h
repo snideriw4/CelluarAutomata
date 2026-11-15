@@ -58,9 +58,19 @@
   *                  identical across standard libraries, so a seed replays
   *                  identically only for the same compiler + library build.
   *  I12 Validation. World::validate() is the executable form of this list. It checks
-  *                  I1, I3-I6, I8 (no shared cells), I9 (facing) and I10, plus the
-  *                  `deaths` bookkeeping. Whenever you add or change an invariant
-  *                  here, change validate() in the same commit.
+  *                  I1, I3-I6, I8 (no shared cells), I9 (facing), I10 and I13-I15,
+  *                  plus the `deaths` bookkeeping. Whenever you add or change an
+  *                  invariant here, change validate() in the same commit.
+  *  I13 Energy pool. A living worm has 1 <= energy <= energyCapacity() (the sum of
+  *                  Tune::CAPACITY over its segments); a dead worm has energy == 0.
+  *                  A worm whose energy reaches 0 must die (starvation, from E3 on).
+  *  I14 Food.       Every tile holds 0..Tune::FOOD_MAX food. Food belongs to the
+  *                  tile: HexGrid::clearCell never touches it, and a tile with food
+  *                  is still T_EMPTY for movement.
+  *  I15 Ledger.     Energy is conserved: totalEnergy() (all living pools + all food)
+  *                  == energyIn - energyOut, always. Energy may only be created by
+  *                  adding to energyIn, destroyed by adding to energyOut, or moved
+  *                  between a worm and tiles. Any other change is a bug.
   * =============================================================================
   */
 
@@ -288,17 +298,21 @@ struct World {
      *         segment, cell and invariant involved.
      *
      * Checks, in order:
-     *   A. grid arrays all hold exactly w*h elements
+     *   A. grid arrays (type, orgId, hp, food) all hold exactly w*h elements
      *   B. per organism: dead worms hold no body/hp; living worms have a valid
      *      genome (I10), facing 0..5, body.size() == hp.size() >= 1 and at most
      *      genome.targetLength (I3); and for every segment: the cell is on the
      *      grid, no other segment owns it (I3/I8), it is adjacent to the
      *      previous segment (I3), and the grid agrees with the organism: type ==
      *      typeAt(i, len) and not empty (I4), orgId == id (I5), hp > 0, and the
-     *      hp mirror matches (I5/I6)
+     *      hp mirror matches (I5/I6); finally its energy is within
+     *      1..energyCapacity (I13). A dead worm must hold no energy (I13)
      *   C. grid sweep: empty cells carry orgId 0 and hp 0, and every occupied
-     *      cell belongs to a living worm's body (no orphan cells) (I5/I6)
+     *      cell belongs to a living worm's body (no orphan cells) (I5/I6); no
+     *      tile holds more than Tune::FOOD_MAX food (I14)
      *   D. bookkeeping: `deaths` equals the number of dead organisms
+     *   E. energy ledger: both counters are non-negative and totalEnergy()
+     *      equals energyIn - energyOut (I15)
      *
      * Not checked (cannot be seen from the data): I2 pointer lifetimes, I7 phase
      * discipline, I9 for code paths that never store a direction, and I11 RNG

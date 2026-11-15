@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="..\CelluarAutomata\Genome.cpp" />
     <ClCompile Include="..\CelluarAutomata\World.cpp" />
+    <ClCompile Include="EnergyTests.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RegressionTests.cpp" />
     <ClCompile Include="ValidatorTests.cpp" />

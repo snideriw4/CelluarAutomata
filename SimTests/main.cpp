@@ -12,6 +12,7 @@
 int main() {
     th::Stats stats;
     th::runValidatorTests(stats);
+    th::runEnergyTests(stats);
     th::runRegressionTests(stats);
 
     std::printf("\n%d checks, %d failed, %d pending\n", stats.checks, stats.failures, stats.pending);

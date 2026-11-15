@@ -16,9 +16,9 @@ namespace th {
 
     /** @brief Running totals for one test session. */
     struct Stats {
-        int checks = 0;   ///< assertions evaluated
+        int checks = 0;     ///< assertions evaluated
         int failures = 0;   ///< assertions that failed
-        int pending = 0;   ///< checks that cannot pass yet (e.g. golden value not recorded)
+        int pending = 0;    ///< checks that cannot pass yet (e.g. golden value not recorded)
     };
 
     /**
@@ -70,6 +70,7 @@ namespace th {
 
     // Test groups (each defined in its own .cpp, called from main.cpp).
     void runValidatorTests(Stats& s);
+    void runEnergyTests(Stats& s);
     void runRegressionTests(Stats& s);
 
 } // namespace th
