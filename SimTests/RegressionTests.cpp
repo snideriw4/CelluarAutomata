@@ -46,8 +46,8 @@ namespace th {
      */
     static const Scenario SCENARIOS[] = {
         // name        w   h  worms ticks  golden (0 = not recorded)
-        { "standard", 60, 40,   40,  600,  0 },
-        { "crowded",  30, 20,  120,  800,  0 },
+        { "standard", 60, 40,   40,  600,  0xedcff2c8ad4c6042ULL },
+        { "crowded",  30, 20,  120,  800,  0xf8694caaed0f41b5ULL },
     };
 
     /**
