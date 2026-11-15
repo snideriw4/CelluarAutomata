@@ -10,7 +10,7 @@ Genome Genome::random(std::mt19937& rng) {
 	Genome g;
 	g.period = uint8_t(1 + rng() % 4);
 	for (int i = 0; i < 4; ++i) g.pattern[i] = uint8_t(T_MOVER + rng() % 4);
-	g.targetLength = uint8_t(5 + rng() % 21);
+	g.targetLength = uint8_t(10 + rng() % 25);	// []
 	g.growInterval = uint8_t(1 + rng() % 4);
 	g.agility = 3.0f * u01(rng);
 	for (int i = 0; i < 6; ++i) g.moveWeight[i] = 0.05f + 0.5f * u01(rng);

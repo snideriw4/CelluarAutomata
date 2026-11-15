@@ -192,3 +192,113 @@ void World::step() {
     }
     ++tick;
 }
+
+// ------------------------ Diagnostics --------------------------
+std::string World::validate() const {
+    const int cells = grid.w * grid.h;
+
+    // "cell 123 (col 3, row 2)" for error messages. Only call with a valid index.
+    auto cellStr = [&](int i) {
+        return "cell " + std::to_string(i) + " (col " + std::to_string(i % grid.w) +
+            ", row " + std::to_string(i / grid.w) + ")";
+        };
+
+    // ---- A. grid arrays ----
+    if (cells <= 0 || grid.type.size() != size_t(cells) ||
+        grid.orgId.size() != size_t(cells) || grid.hp.size() != size_t(cells))
+        return "grid arrays do not all have exactly w*h elements";
+
+    // ---- B. organisms (also records which organism owns each cell) ----
+    std::vector<uint32_t> owner(size_t(cells), 0);
+    int deadCount = 0;
+
+    for (size_t k = 0; k < orgs.size(); ++k) {
+        const Organism& o = orgs[k];
+        const uint32_t id = uint32_t(k + 1);
+        const std::string who = "organism " + std::to_string(id);
+
+        if (!o.alive) {
+            ++deadCount;
+            if (!o.body.empty() || !o.hp.empty())
+                return who + " is dead but still has body/hp entries (I1/I3)";
+            continue;
+        }
+
+        const Genome& g = o.genome;
+        if (g.period < 1 || g.period > 4)
+            return who + ": genome.period " + std::to_string(int(g.period)) + " is outside 1..4 (I10)";
+        if (g.growInterval < 1)
+            return who + ": genome.growInterval is 0 (I10)";
+        if (g.targetLength < 1)
+            return who + ": genome.targetLength is 0 (I10)";
+        if (o.facing < 0 || o.facing > 5)
+            return who + ": facing " + std::to_string(o.facing) + " is outside 0..5 (I9)";
+        if (o.body.empty())
+            return who + " is alive but has an empty body (I3)";
+        if (o.body.size() != o.hp.size())
+            return who + ": body has " + std::to_string(o.body.size()) +
+            " segments but hp has " + std::to_string(o.hp.size()) + " (I3)";
+        if (o.body.size() > g.targetLength)
+            return who + ": has " + std::to_string(o.body.size()) +
+            " segments, more than genome.targetLength " + std::to_string(int(g.targetLength));
+
+        const int len = int(o.body.size());
+        for (int i = 0; i < len; ++i) {
+            const int c = o.body[size_t(i)];
+            const std::string seg = who + " segment " + std::to_string(i);
+
+            if (c < 0 || c >= cells)
+                return seg + ": cell index " + std::to_string(c) + " is outside the grid (I3)";
+            if (owner[size_t(c)] != 0)
+                return seg + " at " + cellStr(c) + " is already occupied by organism " +
+                std::to_string(owner[size_t(c)]) + " (cell shared, I3/I8)";
+            owner[size_t(c)] = id;
+
+            if (i > 0) {
+                const int prev = o.body[size_t(i - 1)];   // validated on the previous iteration
+                bool adjacent = false;
+                for (int d = 0; d < 6 && !adjacent; ++d) adjacent = (grid.neighbor(prev, d) == c);
+                if (!adjacent)
+                    return seg + " at " + cellStr(c) + " is not adjacent to segment " +
+                    std::to_string(i - 1) + " at " + cellStr(prev) + " (I3)";
+            }
+
+            const uint8_t expect = g.typeAt(i, len);
+            if (expect == T_EMPTY || expect >= T_COUNT)
+                return seg + ": genome gives invalid cell type " + std::to_string(int(expect)) + " (I4/I6)";
+            if (grid.type[size_t(c)] != expect)
+                return seg + " at " + cellStr(c) + ": grid type is " +
+                std::to_string(int(grid.type[size_t(c)])) + " but genome expects " +
+                std::to_string(int(expect)) + " (I4/I5)";
+            if (grid.orgId[size_t(c)] != id)
+                return seg + " at " + cellStr(c) + ": grid orgId is " +
+                std::to_string(grid.orgId[size_t(c)]) + ", expected " + std::to_string(id) + " (I5)";
+            if (o.hp[size_t(i)] <= 0)
+                return seg + ": hp is " + std::to_string(o.hp[size_t(i)]) +
+                " (a living worm's segments must have hp > 0)";
+            if (grid.hp[size_t(c)] != uint8_t(std::clamp(o.hp[size_t(i)], 0, 255)))
+                return seg + " at " + cellStr(c) + ": grid hp mirror is " +
+                std::to_string(int(grid.hp[size_t(c)])) + " but segment hp is " +
+                std::to_string(o.hp[size_t(i)]) + " (I5/I6)";
+        }
+    }
+
+    // ---- C. grid sweep ----
+    for (int i = 0; i < cells; ++i) {
+        if (grid.type[size_t(i)] == T_EMPTY) {
+            if (grid.orgId[size_t(i)] != 0 || grid.hp[size_t(i)] != 0)
+                return cellStr(i) + " is empty but has stale orgId/hp (I5)";
+        }
+        else if (owner[size_t(i)] == 0) {
+            return cellStr(i) + " is occupied (type " + std::to_string(int(grid.type[size_t(i)])) +
+                ") but no living organism owns it (I5/I6)";
+        }
+    }
+
+    // ---- D. bookkeeping ----
+    if (uint64_t(deadCount) != deaths)
+        return "deaths counter is " + std::to_string(deaths) +
+        " but the number of dead organisms is " + std::to_string(deadCount);
+
+    return std::string();
+}

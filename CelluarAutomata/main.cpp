@@ -33,7 +33,8 @@
 */
 
 #include "raylib.h"
-#include <algorithm>   // std::min, std::max
+#include <algorithm>
+#include <string>
 
 #include "Genome.h"     // Genome::random (click-to-spawn)
 #include "Render.h"     // HexLayout, ViewMode, drawGrid
@@ -69,12 +70,30 @@ int main() {
     float accum = 0.0f;
     static const char* VIEW_NAMES[VIEW_COUNT] = { "type", "organism", "health" };
 
+
+    // Debug-only self-check: validates the world after every change to it. On
+    // the first violation it pauses the sim, remembers the message for the HUD
+    // and logs it. Compiles to nothing in Release (NDEBUG) builds.
+    std::string worldError;
+    auto checkWorld = [&](const char* when) {
+        #ifndef NDEBUG
+            if (!worldError.empty()) return;              // keep the FIRST violation
+            std::string err = world.validate();
+            if (err.empty()) return;
+            worldError = std::string("[") + when + ", tick " + std::to_string(world.tick) + "] " + err;
+            paused = true;
+            TraceLog(LOG_ERROR, "VALIDATE: %s", worldError.c_str());
+        #else
+            (void)when;
+        #endif
+     };
+
     while (!WindowShouldClose()) {
         // ---- input ----
         if (IsKeyPressed(KEY_SPACE)) paused = !paused;
         if (IsKeyPressed(KEY_TAB))   view = (view + 1) % VIEW_COUNT;
-        if (IsKeyPressed(KEY_R))     world.clear();
-        if (IsKeyPressed(KEY_S))     world.spawnRandom(20);
+        if (IsKeyPressed(KEY_R)) { world.clear(); worldError.clear(); checkWorld("clear"); }
+        if (IsKeyPressed(KEY_S)) { world.spawnRandom(20); checkWorld("spawnRandom"); }
         if (IsKeyPressed(KEY_UP))    ticksPerSec = std::min(240.0f, ticksPerSec * 1.5f);
         if (IsKeyPressed(KEY_DOWN))  ticksPerSec = std::max(0.5f, ticksPerSec / 1.5f);
 
@@ -94,15 +113,22 @@ int main() {
         int hc = -1, hr = -1;
         layout.pixelToCell(GetScreenToWorld2D(GetMousePosition(), cam), hc, hr);
         bool hoverOk = world.grid.inBounds(hc, hr);
-        if (hoverOk && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        if (hoverOk && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             world.spawn(world.grid.idx(hc, hr), Genome::random(world.rng));
+            checkWorld("spawn");
+        }
 
         // ---- fixed-rate simulation ----
         if (!paused) {
             accum += GetFrameTime();
             float dt = 1.0f / ticksPerSec;
             int guard = 0;
-            while (accum >= dt && guard++ < 20) { world.step(); accum -= dt; }
+            while (accum >= dt && guard++ < 20) {
+                world.step();
+                accum -= dt;
+                checkWorld("step");
+                if (!worldError.empty()) break;       // stop on the tick that broke it
+            }
             if (guard >= 20) accum = 0.0f;
         }
 
@@ -122,6 +148,7 @@ int main() {
             10, 10, 20, RAYWHITE);
         DrawText("Click: spawn | S: spawn 20 | Space: pause | Up/Down: speed | Tab: view | R: clear",
             10, 36, 16, GRAY);
+        if (!worldError.empty()) DrawText(worldError.c_str(), 10, 62, 16, RED);
         EndDrawing();
     }
     CloseWindow();
