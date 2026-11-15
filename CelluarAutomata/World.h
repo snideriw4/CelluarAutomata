@@ -78,6 +78,11 @@ struct World {
     // stats for the HUD
     uint64_t contests = 0, deaths = 0;
 
+    // Energy ledger. Every unit of energy that enters or leaves the world must be counted here,
+    // so that  totalEnergy() == energyIn - energyOut  holds at all times.
+    int64_t energyIn = 0;   // created: newborn endowments (later: food production)
+    int64_t energyOut = 0;   // destroyed: heat (later), food that did not fit on a tile, ...
+
     // scratch buffers reused every tick
     std::vector<Intent> intents, winners;
     std::vector<int> damage;
@@ -90,7 +95,7 @@ struct World {
      *       reproducible replay of an earlier run.
      * Called by: main (R key).
      */
-    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; }
+    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; energyIn = energyOut = 0; }
 
     /** @brief Number of organisms with alive == true. O(orgs). HUD only. */
     int aliveCount() const {
@@ -142,6 +147,41 @@ struct World {
      *       that touches body.front() (it is empty).
      */
     void kill(Organism& o);
+
+    /**
+     * @brief Largest energy pool this worm can hold: the sum of Tune::CAPACITY over
+     *        every segment's current type.
+     * @return Non-negative integer. Pure function, O(body length).
+     * Called by: validate (E2), and the eating/growth steps (E4/E6).
+     * @note Capacity changes when the worm grows (segment types are derived from
+     *       length, see I4). Keep Tune::CAPACITY[T_TAIL] no larger than the capacity
+     *       of any pattern type, or clamp energy when a segment is added.
+     */
+    int energyCapacity(const Organism& o) const;
+
+    /**
+     * @brief All energy currently in the world: every living worm's pool plus all
+     *        food on all tiles.
+     * @return Sum as int64_t. O(orgs + w*h).
+     * @note The energy ledger says this must equal energyIn - energyOut at all times.
+     *       Dead worms hold 0 by definition (see returnEnergyToTiles) and are not summed.
+     * Called by: validate (E2), the HUD (E5), tests.
+     */
+    int64_t totalEnergy() const;
+
+    /**
+     * @brief Hand a worm's remaining energy back to the tiles it occupies.
+     * @param o The dying worm. Must still have its body (call BEFORE the body is cleared).
+     * @post o.energy == 0. Energy is split evenly over the body's tiles, with any
+     *       remainder going one unit at a time to the first segments (head first). A
+     *       tile only accepts up to Tune::FOOD_MAX; whatever does not fit is
+     *       dissipated and counted in energyOut, so the ledger stays exact.
+     * Mutates: grid.food, o.energy, energyOut.
+     * Called by: kill.
+     * @note A worm that starved has 0 energy and returns nothing; one killed in a
+     *       collision returns what it was holding.
+     */
+    void returnEnergyToTiles(Organism& o);
 
     /**
      * @brief Create a single-cell worm at `cellIdx`.

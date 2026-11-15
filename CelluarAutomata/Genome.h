@@ -55,7 +55,7 @@ struct Genome {
     /**
      * @brief Build a random genome.
      * @param rng The world's RNG (advanced by this call; see I11).
-     * @return Genome with period 1..4, targetLength 5..25, growInterval 1..4,
+     * @return Genome with period 1..4, targetLength 10..34, growInterval 1..4,
      *         agility 0..3, all four pattern slots random from MOVER..OFFENSE
      *         (only the first `period` are used), and moveWeights of 0.05..0.55
      *         plus a +3 bonus on one of {0,1,2,4,5} so each worm has a clear

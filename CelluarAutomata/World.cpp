@@ -30,11 +30,48 @@ int World::defensePower(const Organism& o) const {
 }
 
 void World::kill(Organism& o) {
+    returnEnergyToTiles(o);
     for (int c : o.body) grid.clearCell(c);
     o.body.clear();
     o.hp.clear();
     o.alive = false;
     ++deaths;
+}
+
+int World::energyCapacity(const Organism& o) const {
+    const int len = int(o.body.size());
+    int sum = 0;
+    for (int i = 0; i < len; ++i) sum += Tune::CAPACITY[o.genome.typeAt(i, len)];
+    return sum;
+}
+
+int64_t World::totalEnergy() const {
+    int64_t sum = 0;
+    for (const Organism& o : orgs)
+        if (o.alive) sum += o.energy;
+    for (uint16_t f : grid.food) sum += f;
+    return sum;
+}
+
+void World::returnEnergyToTiles(Organism& o) {
+    const int n = int(o.body.size());
+    if (n == 0) {                                // should not happen; keep the ledger exact anyway
+        energyOut += std::max(0, o.energy);
+        o.energy = 0;
+        return;
+    }
+    const int pool = std::max(0, o.energy);
+    const int share = pool / n;
+    const int extra = pool % n;                  // the first `extra` segments get one more unit
+    for (int i = 0; i < n; ++i) {
+        const int amount = share + (i < extra ? 1 : 0);
+        uint16_t& tile = grid.food[size_t(o.body[size_t(i)])];
+        const int room = std::max(0, Tune::FOOD_MAX - int(tile));
+        const int put = std::min(amount, room);
+        tile = uint16_t(tile + put);
+        energyOut += amount - put;               // what does not fit on the tile is dissipated
+    }
+    o.energy = 0;
 }
 
 bool World::spawn(int cellIdx, const Genome& g) {
@@ -44,6 +81,8 @@ bool World::spawn(int cellIdx, const Genome& g) {
     o.facing = int(rng() % 6);
     o.body.push_back(cellIdx);
     o.hp.assign(1, Tune::SEGMENT_HP);
+    o.energy = Tune::NEWBORN_ENERGY;
+    energyIn += Tune::NEWBORN_ENERGY;       // created from nothing; counted in the ledger
     orgs.push_back(o);
     retype(orgs.back(), uint32_t(orgs.size()));
     return true;

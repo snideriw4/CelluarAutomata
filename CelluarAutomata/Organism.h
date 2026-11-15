@@ -16,7 +16,7 @@
   *
   * Members: `body` (grid positions, head first), `hp` (per-segment, same length
   * as body, indexed by segment not position), `facing` (absolute direction of
-  * the last move, 0..5; random for a newborn), `alive`.
+  * the last move, 0..5; random for a newborn), `alive`, and `energy`.
   *
   * @note See I1-I6 for the invariants tying this to the grid. Dead organisms
   *       keep their slot in World::orgs but have empty body/hp.
@@ -27,6 +27,8 @@ struct Organism {
     std::vector<int> hp;      // per-SEGMENT hit points, indexed like body (hp[0] = head)
     int facing = 0;
     bool alive = true;
+    int energy = 0;           // the worm's energy pool (integer units); 0 for a dead worm.
+                              // Bounded above by World::energyCapacity(); see the energy ledger.
 };
 
 // What a worm wants to do this tick. Produced in the DECIDE phase and never applied directly.

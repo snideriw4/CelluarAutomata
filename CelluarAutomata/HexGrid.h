@@ -34,7 +34,10 @@ inline constexpr int DIRS[2][6][2] = {
  * hexes in "odd-r" offset layout (odd rows are shifted half a cell right).
  * Edges are hard walls (no wrapping).
  *
- * Arrays: type (CellType), orgId (see I1), hp (render mirror only, see I6).
+ * Arrays: type (CellType), orgId (see I1), hp (render mirror only, see I6), and
+ *         food (energy lying on each tile, 0..Tune::FOOD_MAX). 
+ *         Food belongs to the TILE: it is independent of what stands on the tile, 
+ *         and a tile with food is still T_EMPTY for movement purposes.
  *
  * @note All arrays always hold exactly w*h elements. Never resize them after
  *       construction.
@@ -45,11 +48,11 @@ struct HexGrid {
     std::vector<uint8_t>  type;    // CellType
     std::vector<uint32_t> orgId;   // 0 = none, else index+1 into World::orgs
     std::vector<uint8_t>  hp;      // mirror of segment hp, for rendering
+    std::vector<uint16_t> food;    // energy on each tile (0..Tune::FOOD_MAX); NOT cleared by clearCell
 
     HexGrid(int w_, int h_)
         : w(w_), h(h_), type(size_t(w_)* h_, T_EMPTY),
-        orgId(size_t(w_)* h_, 0), hp(size_t(w_)* h_, 0) {
-    }
+        orgId(size_t(w_)* h_, 0), hp(size_t(w_)* h_, 0), food(size_t(w_)* h_, 0) {}
 
     /**
      * @brief Convert (column,row) to the flat array index.
@@ -83,12 +86,14 @@ struct HexGrid {
      * @param i Flat cell index.
      * @note Touches only the grid, not any Organism. The caller is responsible
      *       for removing the cell from the owning organism's body (see I5).
+     * @note Deliberately leaves `food` alone: food belongs to the tile, not to whatever
+     *       was standing on it.
      * Called by: World::applyMove (vacated tail), World::kill.
      */
     void clearCell(int i) { type[i] = T_EMPTY; orgId[i] = 0; hp[i] = 0; }
 
     /**
-     * @brief Reset every cell to empty.
+     * @brief Reset every cell to empty and remove all food.
      * @note Grid only. World::clear() pairs this with orgs.clear(); calling it
      *       alone would leave organisms pointing at empty cells (breaks I3/I6).
      */
@@ -96,5 +101,6 @@ struct HexGrid {
         std::fill(type.begin(), type.end(), uint8_t(T_EMPTY));
         std::fill(orgId.begin(), orgId.end(), 0u);
         std::fill(hp.begin(), hp.end(), uint8_t(0));
+        std::fill(food.begin(), food.end(), uint16_t(0));
     }
 };

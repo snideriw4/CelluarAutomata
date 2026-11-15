@@ -53,10 +53,10 @@
  * @warning VIEW_NAMES[] below must list one name per ViewMode, in enum order.
  */
 int main() {
-    InitWindow(1280, 800, "Hex worm prototype");
+    InitWindow(1280, 800, "Cuppa Dirt Prototype");
     SetTargetFPS(60);
 
-    World world(60, 40);
+    World world(80, 60);
     HexLayout layout;
 
     Camera2D cam{};
