@@ -18,8 +18,8 @@
  * LAYERING RULES
  *   - Simulation files never include raylib.h or Render.h.
  *   - The render layer reads the grid; it never mutates the World.
- *   - World state changes only through World::step(), spawn(), spawnRandom()
- *     and clear(), called from the driver and never while drawing.
+ *      - World state changes only through World::step(), spawn(), spawnRandom()
+ *        and clear(), called from the driver and never while drawing.
  */
 
 /*
