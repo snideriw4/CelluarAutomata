@@ -137,6 +137,8 @@ namespace th {
             { "energyIn tampered",               "energy ledger broken",      [&](World& w) { w.energyIn += 1; } },
             { "energyOut tampered",              "energy ledger broken",      [&](World& w) { w.energyOut += 1; } },
             { "negative ledger counter",         "counters are negative",     [&](World& w) { w.energyOut = -1; } },
+            { "food accumulator negative",       "food accumulator",          [&](World& w) { w.foodAccum = -1; } },
+            { "food accumulator too large",      "food accumulator",          [&](World& w) { w.foodAccum = int64_t(Tune::FOOD_DROP) * 1000; } },
         };
 
         for (const Case& c : cases) {

@@ -40,8 +40,9 @@
   *                  Organism::body / Organism::hp. grid.hp is a render-only
   *                  mirror; never use it for simulation logic.
   *  I7  Phases.     DECIDE may mutate only the RNG and scratch buffers. RESOLVE
-  *                  may mutate only scratch buffers and stats. APPLY is the only
-  *                  phase that changes world state.
+  *                  may mutate only scratch buffers and stats. APPLY and the phases
+  *                  after it (ENVIRONMENT now; EAT and METABOLISM later) are the
+  *                  only phases that change world state.
   *  I8  Targets.    decide() only targets cells that are EMPTY in the snapshot,
   *                  and resolve gives each cell at most one winner, so APPLY
   *                  moves can never overlap. Letting a head target an occupied
@@ -66,7 +67,8 @@
   *                  A worm whose energy reaches 0 must die (starvation, from E3 on).
   *  I14 Food.       Every tile holds 0..Tune::FOOD_MAX food. Food belongs to the
   *                  tile: HexGrid::clearCell never touches it, and a tile with food
-  *                  is still T_EMPTY for movement.
+  *                  is still T_EMPTY for movement. The production carry-over
+  *                  `foodAccum` stays in 0 .. Tune::FOOD_DROP*1000 - 1.
   *  I15 Ledger.     Energy is conserved: totalEnergy() (all living pools + all food)
   *                  == energyIn - energyOut, always. Energy may only be created by
   *                  adding to energyIn, destroyed by adding to energyOut, or moved
@@ -98,6 +100,10 @@ struct World {
     int64_t energyIn = 0;   // created: newborn endowments (later: food production)
     int64_t energyOut = 0;   // destroyed: heat (later), food that did not fit on a tile, ...
 
+    // Food production carry-over, in milli-energy (see environmentPhase). Not energy yet: it
+    // becomes energy, and is counted in energyIn, only when a drop actually lands on a tile.
+    int64_t foodAccum = 0;
+
     // scratch buffers reused every tick
     std::vector<Intent> intents, winners;
     std::vector<int> damage;
@@ -110,7 +116,7 @@ struct World {
      *       reproducible replay of an earlier run.
      * Called by: main (R key).
      */
-    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; energyIn = energyOut = 0; }
+    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; energyIn = energyOut = 0; foodAccum = 0; }
 
     /** @brief Number of organisms with alive == true. O(orgs). HUD only. */
     int aliveCount() const {
@@ -199,6 +205,31 @@ struct World {
     void returnEnergyToTiles(Organism& o);
 
     /**
+     * @brief ENVIRONMENT phase: put new food on the ground.
+     *
+     * Every tick FOOD_RATE * (w*h) milli-energy is added to `foodAccum`; each whole
+     * FOOD_DROP*1000 of it becomes one drop of FOOD_DROP energy on a uniformly random
+     * tile, topped up only to Tune::FOOD_MAX. Only the energy that actually lands is
+     * counted in energyIn, so production slows down by itself as tiles fill, and the
+     * ledger stays exact. The tile is drawn from `rng`, so this phase consumes random
+     * numbers (see I11).
+     * Mutates: grid.food, foodAccum, energyIn, rng.
+     * Called by: step (last phase of a tick). Calls nothing else.
+     * @note Food lands on any tile, occupied or not (I14: food belongs to the tile).
+     *       Uniform placement is a placeholder: patches or gradients would go here.
+     */
+    void environmentPhase();
+
+    /**
+     * @brief Add a random amount of food to every tile, for a lived-in starting world.
+     * @param percentOfMax Each tile receives a random 0..percentOfMax % of Tune::FOOD_MAX
+     *                     (clamped to 0..100), topped up only to FOOD_MAX.
+     * Mutates: grid.food, energyIn, rng. The energy created is counted in energyIn.
+     * Called by: main (startup and after clear). Not called by step.
+     */
+    void seedFood(int percentOfMax);
+
+    /**
      * @brief Create a single-cell worm at `cellIdx`.
      * @param cellIdx Flat grid index. Must be in range [0, w*h); not checked.
      * @param g       Genome to give the newborn.
@@ -278,12 +309,13 @@ struct World {
      *             claimed by two or more worms.
      * 3. APPLY:   winners move; then damage is subtracted from head HP
      *             (hp[0]); worms with hp[0] <= 0 are killed.
+     * 4. ENVIRONMENT: new food appears on the ground (environmentPhase).
      *
      * Losers do not move this tick. Update order does not affect the outcome
      * (aside from RNG draw order, which is deterministic).
-     * Mutates: grid, orgs, tick, contests, deaths and the scratch buffers.
+     * Mutates: grid, orgs, tick, contests, deaths, foodAccum, energyIn and the scratch buffers.
      * Called by: main's fixed-timestep loop. Calls: decide, attackPower,
-     * defensePower, applyMove, kill, retype.
+     * defensePower, applyMove, kill, retype, environmentPhase.
      * @warning Do not call spawn() from inside this function (I2).
      */
     void step();
@@ -313,6 +345,7 @@ struct World {
      *   D. bookkeeping: `deaths` equals the number of dead organisms
      *   E. energy ledger: both counters are non-negative and totalEnergy()
      *      equals energyIn - energyOut (I15)
+     *   F. food production carry-over `foodAccum` is within 0..FOOD_DROP*1000-1 (I14)
      *
      * Not checked (cannot be seen from the data): I2 pointer lifetimes, I7 phase
      * discipline, I9 for code paths that never store a direction, and I11 RNG

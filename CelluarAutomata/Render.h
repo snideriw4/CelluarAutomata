@@ -69,7 +69,8 @@ enum ViewMode { VIEW_TYPE = 0, VIEW_ORGANISM, VIEW_HEALTH, VIEW_COUNT };
  * @param g    Grid to read (read-only).
  * @param i    Flat cell index.
  * @param view VIEW_TYPE, VIEW_ORGANISM, or VIEW_HEALTH.
- * Empty cells are always the empty color. Organism view hashes orgId to a hue
+ * Empty cells show their food in every view: black for none up to a fully
+ * saturated green at Tune::FOOD_MAX. Organism view hashes orgId to a hue
  * (golden-angle spread); health view maps hp / SEGMENT_HP to red..green.
  * @note Reads grid.hp, which is only a mirror (I6). It is correct as of the
  *       last retype() and is for display only.

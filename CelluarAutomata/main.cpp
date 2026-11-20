@@ -35,9 +35,11 @@
 #include "raylib.h"
 #include <algorithm>
 #include <string>
+#include <format>
 
 #include "Genome.h"     // Genome::random (click-to-spawn)
 #include "Render.h"     // HexLayout, ViewMode, drawGrid
+#include "Tuning.h"     // Tune::FOOD_SEED_PERCENT
 #include "World.h"      // World
 
 /**
@@ -63,6 +65,8 @@ int main() {
     Camera2D cam{};
     cam.zoom = 0.9f;
     cam.offset = { 40, 40 };
+
+    world.seedFood(Tune::FOOD_SEED_PERCENT);
 
     bool paused = false;
     int view = VIEW_TYPE;
@@ -92,7 +96,7 @@ int main() {
         // ---- input ----
         if (IsKeyPressed(KEY_SPACE)) paused = !paused;
         if (IsKeyPressed(KEY_TAB))   view = (view + 1) % VIEW_COUNT;
-        if (IsKeyPressed(KEY_R)) { world.clear(); worldError.clear(); checkWorld("clear"); }
+        if (IsKeyPressed(KEY_R)) { world.clear(); world.seedFood(Tune::FOOD_SEED_PERCENT); worldError.clear(); checkWorld("clear"); }
         if (IsKeyPressed(KEY_S)) { world.spawnRandom(20); checkWorld("spawnRandom"); }
         if (IsKeyPressed(KEY_UP))    ticksPerSec = std::min(240.0f, ticksPerSec * 1.5f);
         if (IsKeyPressed(KEY_DOWN))  ticksPerSec = std::max(0.5f, ticksPerSec / 1.5f);
@@ -141,11 +145,10 @@ int main() {
             DrawPolyLinesEx(layout.center(hc, hr), 6, layout.R, 30.0f, 2.0f / cam.zoom, WHITE);
         EndMode2D();
 
-        DrawText(TextFormat("Tick %llu  Alive %d/%d  Contests %llu  Deaths %llu  %.1f t/s %s  View: %s",
-            (unsigned long long)world.tick, world.aliveCount(), int(world.orgs.size()),
-            (unsigned long long)world.contests, (unsigned long long)world.deaths,
-            ticksPerSec, paused ? "[PAUSED]" : "", VIEW_NAMES[view]),
-            10, 10, 20, RAYWHITE);
+        const std::string hud = std::format("Tick {}  Alive {}/{}  Contests {}  Deaths {}  Energy {}  {:.1f} t/s {}  View: {}",
+            world.tick, world.aliveCount(), world.orgs.size(), world.contests, world.deaths,
+            world.totalEnergy(), ticksPerSec, paused ? "[PAUSED]" : "", VIEW_NAMES[view]);
+        DrawText(hud.c_str(), 10, 10, 20, RAYWHITE);
         DrawText("Click: spawn | S: spawn 20 | Space: pause | Up/Down: speed | Tab: view | R: clear",
             10, 36, 16, GRAY);
         if (!worldError.empty()) DrawText(worldError.c_str(), 10, 62, 16, RED);

@@ -74,6 +74,33 @@ void World::returnEnergyToTiles(Organism& o) {
     o.energy = 0;
 }
 
+// ------------------------ Environment --------------------------
+
+void World::environmentPhase() {
+    const int cells = grid.w * grid.h;
+    const int64_t dropUnit = int64_t(Tune::FOOD_DROP) * 1000;      // milli-energy per drop
+    foodAccum += int64_t(Tune::FOOD_RATE) * cells;
+    const int64_t drops = foodAccum / dropUnit;
+    foodAccum -= drops * dropUnit;
+    for (int64_t d = 0; d < drops; ++d) {
+        const size_t tile = size_t(rng() % uint32_t(cells));
+        const int room = std::max(0, Tune::FOOD_MAX - int(grid.food[tile]));
+        const int added = std::min(Tune::FOOD_DROP, room);
+        grid.food[tile] = uint16_t(grid.food[tile] + added);
+        energyIn += added;                       // only what actually lands is created
+    }
+}
+
+void World::seedFood(int percentOfMax) {
+    const int top = Tune::FOOD_MAX * std::clamp(percentOfMax, 0, 100) / 100;
+    for (uint16_t& f : grid.food) {
+        const int want = int(rng() % uint32_t(top + 1));
+        const int added = std::min(want, std::max(0, Tune::FOOD_MAX - int(f)));
+        f = uint16_t(f + added);
+        energyIn += added;
+    }
+}
+
 bool World::spawn(int cellIdx, const Genome& g) {
     if (grid.type[cellIdx] != T_EMPTY) return false;
     Organism o;
@@ -190,6 +217,9 @@ void World::step() {
         if (orgs[i].hp[0] <= 0) kill(orgs[i]);      // head destroyed = organism dies (for now)
         else                    retype(orgs[i], uint32_t(i + 1));
     }
+
+    // 4. ENVIRONMENT: new food appears on the ground.
+    environmentPhase();
     ++tick;
 }
 
@@ -322,6 +352,12 @@ std::string World::validate() const {
     if (held != energyIn - energyOut)
         return "energy ledger broken: the world holds " + std::to_string(held) +
         " but energyIn - energyOut is " + std::to_string(energyIn - energyOut) + " (I15)";
+
+    // ---- F. food production carry-over (I14) ----
+    const int64_t dropUnit = int64_t(Tune::FOOD_DROP) * 1000;
+    if (foodAccum < 0 || foodAccum >= dropUnit)
+        return "food accumulator " + std::to_string(foodAccum) + " is outside 0.." +
+        std::to_string(dropUnit - 1) + " (I14)";
 
     return std::string();
 }

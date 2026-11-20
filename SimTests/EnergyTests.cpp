@@ -158,8 +158,73 @@ namespace th {
         check(s, w.energyIn == 0 && w.energyOut == 0 && w.totalEnergy() == 0, "World::clear resets the ledger");
     }
 
+    /** With no worms, production creates exactly the configured amount, all of it on the ground. */
+    static void testFoodProductionRate(Stats& s) {
+        World w(80, 60);
+        const int cells = 80 * 60;
+        const int ticks = 100;                              // short enough that no tile fills up
+        for (int t = 0; t < ticks; ++t) w.step();
+
+        const int64_t unit = int64_t(Tune::FOOD_DROP) * 1000;
+        const int64_t milli = int64_t(Tune::FOOD_RATE) * cells * ticks;
+        const int64_t expected = (milli / unit) * Tune::FOOD_DROP;
+        check(s, w.energyIn == expected, "production over " + std::to_string(ticks) + " ticks creates the configured amount",
+            "expected " + std::to_string(expected) + ", got " + std::to_string(w.energyIn));
+        check(s, w.foodAccum == milli % unit, "the remainder is carried in foodAccum");
+        check(s, w.totalEnergy() == w.energyIn && w.energyOut == 0, "all of it is on the ground and nothing was destroyed");
+    }
+
+    /** Production never overfills a tile, and stops creating energy once everything is full. */
+    static void testFoodSaturates(Stats& s) {
+        World w(20, 15);
+        const int cells = 20 * 15;
+        const int64_t capacity = int64_t(cells) * Tune::FOOD_MAX;
+        const int ticks = 8 * Tune::FOOD_MAX * 1000 / std::max(1, Tune::FOOD_RATE);     // many times the fill time
+        for (int t = 0; t < ticks; ++t) w.step();
+
+        bool capped = true;
+        for (uint16_t f : w.grid.food) capped = capped && (f <= Tune::FOOD_MAX);
+        check(s, capped, "no tile ever exceeds FOOD_MAX");
+        check(s, w.energyIn <= capacity && w.totalEnergy() == w.energyIn, "created energy never exceeds the ground's capacity");
+        check(s, w.energyIn * 100 >= capacity * 99, "after a long time the ground is (almost) completely full");
+
+        const int64_t before = w.energyIn;
+        for (int t = 0; t < 500; ++t) w.step();
+        check(s, w.energyIn - before <= capacity - before, "once full, production stops creating energy");
+    }
+
+    /** seedFood adds a bounded random amount, never overfills, and keeps the ledger exact. */
+    static void testSeedFood(Stats& s) {
+        World w(30, 20);
+        w.seedFood(30);
+        bool bounded = true;
+        int64_t sum = 0;
+        for (uint16_t f : w.grid.food) { bounded = bounded && (f <= Tune::FOOD_MAX * 30 / 100); sum += f; }
+        check(s, bounded, "seedFood(30) puts at most 30% of FOOD_MAX on any tile");
+        check(s, sum > 0 && w.energyIn == sum && w.totalEnergy() == sum, "seeded food is counted as created energy");
+
+        World zero(30, 20);
+        zero.seedFood(0);
+        check(s, zero.totalEnergy() == 0 && zero.energyIn == 0, "seedFood(0) adds nothing");
+
+        World full(10, 10);
+        full.seedFood(100);
+        full.seedFood(100);
+        bool capped = true;
+        for (uint16_t f : full.grid.food) capped = capped && (f <= Tune::FOOD_MAX);
+        check(s, capped && full.totalEnergy() == full.energyIn, "seeding twice never overfills a tile and the ledger stays exact");
+
+        World c(10, 10);
+        for (int t = 0; t < 5; ++t) c.step();
+        c.clear();
+        check(s, c.foodAccum == 0 && c.totalEnergy() == 0, "World::clear resets the production carry-over");
+    }
+
     void runEnergyTests(Stats& s) {
         std::printf("[energy]\n");
+        testFoodProductionRate(s);
+        testFoodSaturates(s);
+        testSeedFood(s);
         testNewbornEndowment(s);
         testLedgerAndBounds(s);
         testDeathReturnsEnergyEvenly(s);

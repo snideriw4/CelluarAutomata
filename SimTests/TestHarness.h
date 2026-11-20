@@ -51,7 +51,8 @@ namespace th {
 
     /**
      * @brief 64-bit fingerprint of everything visible in the world: every cell's
-     *        type, orgId and hp, plus tick, contests, deaths and the alive count.
+     *        type, orgId and hp, plus tick, contests, deaths, the alive count, food, 
+     *        worm energy, and the ledger.
      * Two worlds with the same fingerprint are, for practical purposes, identical.
      * @note Reads only. Not stable across compilers or standard libraries (see I11);
      *       compare fingerprints only between runs of the same build toolchain.
@@ -65,6 +66,11 @@ namespace th {
         h = fnv1a(h, w.contests);
         h = fnv1a(h, w.deaths);
         h = fnv1a(h, uint64_t(w.aliveCount()));
+        for (uint16_t f : w.grid.food) h = fnv1a(h, f);                 // the food layer
+        for (const Organism& o : w.orgs) h = fnv1a(h, uint64_t(int64_t(o.energy)));   // every worm's pool
+        h = fnv1a(h, uint64_t(w.energyIn));
+        h = fnv1a(h, uint64_t(w.energyOut));
+        h = fnv1a(h, uint64_t(w.foodAccum));
         return h;
     }
 

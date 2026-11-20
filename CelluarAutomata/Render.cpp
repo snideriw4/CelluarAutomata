@@ -20,9 +20,20 @@ static const Color TYPE_COLOR[] = {
 };
 static_assert(sizeof(TYPE_COLOR) / sizeof(TYPE_COLOR[0]) == T_COUNT, "TYPE_COLOR needs one entry per CellType");
 
+/** Hue (degrees) of food; saturation is always full and brightness rises with the amount. */
+static constexpr float FOOD_HUE = 120.0f;     // green
+/** Brightness curve exponent. Below 1 lifts small amounts so a little food is still visible. */
+static constexpr float FOOD_GAMMA = 0.7f;
+
+/** Color of a tile's food: black for none, fully saturated FOOD_HUE at Tune::FOOD_MAX. */
+static Color foodColor(int food) {
+    const float frac = std::clamp(float(food) / float(Tune::FOOD_MAX), 0.0f, 1.0f);
+    return ColorFromHSV(FOOD_HUE, 1.0f, std::pow(frac, FOOD_GAMMA));
+}
+
 Color cellColor(const HexGrid& g, int i, int view) {
     uint8_t t = g.type[i];
-    if (t == T_EMPTY) return TYPE_COLOR[T_EMPTY];
+    if (t == T_EMPTY) return foodColor(int(g.food[size_t(i)]));
     switch (view) {
     case VIEW_ORGANISM: {
         float hue = std::fmod(float(g.orgId[i]) * 137.5f, 360.0f);
