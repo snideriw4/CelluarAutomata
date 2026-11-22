@@ -35,7 +35,7 @@ namespace Tune {
     inline constexpr int DEFENSE[] = { 0,   0,   0,    0,   1,  0,  0 };
     // Energy capacity contributed by each segment, indexed by CellType.
     //                               EMPTY HEAD MOVER STOR DEF OFF TAIL
-    inline constexpr int CAPACITY[] = { 0,  20,  10,   40,  10, 10, 10 };
+    inline constexpr int CAPACITY[] = { 0,  20,  10,   50,  0, 0, 10 };
 
     static_assert(sizeof(ATTACK) / sizeof(ATTACK[0]) == T_COUNT, "ATTACK needs one entry per CellType");
     static_assert(sizeof(DEFENSE) / sizeof(DEFENSE[0]) == T_COUNT, "DEFENSE needs one entry per CellType");
@@ -61,7 +61,7 @@ namespace Tune {
     // stands on in one tick. Genome::random draws it uniformly from BITE_MIN..BITE_MAX.
     // PLACEHOLDER values; they are calibrated once metabolism exists.
     inline constexpr int BITE_MIN = 10;
-    inline constexpr int BITE_MAX = 30;
+    inline constexpr int BITE_MAX = 50;
 
     static_assert(BITE_MIN >= 1 && BITE_MIN <= BITE_MAX && BITE_MAX <= 65535, "bite range must be ordered and fit in a uint16_t");
 }
