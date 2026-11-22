@@ -220,6 +220,123 @@ namespace th {
         check(s, c.foodAccum == 0 && c.totalEnergy() == 0, "World::clear resets the production carry-over");
     }
 
+    /** @brief Set a tile's food by hand, keeping the energy ledger exact. */
+    static void setFood(World& w, size_t tile, int amount) {
+        const int before = w.grid.food[tile];
+        if (amount >= before) w.energyIn += amount - before; else w.energyOut += before - amount;
+        w.grid.food[tile] = uint16_t(amount);
+    }
+
+    /** @brief Set a worm's energy by hand, keeping the energy ledger exact. */
+    static void setEnergy(World& w, Organism& o, int amount) {
+        if (amount >= o.energy) w.energyIn += amount - o.energy; else w.energyOut += o.energy - amount;
+        o.energy = amount;
+    }
+
+    /**
+     * @brief One single-cell worm (the given bite) on tile 55 of a 10x10 world, with `food` on
+     *        its tile and exactly `room` free energy room. The ledger stays exact.
+     * @note room must be 0 .. capacity-1 so the worm keeps at least 1 energy.
+     */
+    static World makeEater(int bite, int room, int food) {
+        World w(10, 10);
+        Genome g;
+        g.biteSize = uint16_t(bite);
+        w.spawn(55, g);
+        setEnergy(w, w.orgs[0], w.energyCapacity(w.orgs[0]) - room);
+        setFood(w, 55, food);
+        return w;
+    }
+
+    /** A bite is the smallest of: biteSize, the food on the tile, and the worm's free room. */
+    static void testEatingMovesEnergyFromTileToWorm(Stats& s) {
+        struct Case { const char* name; int bite, room, food, taken; };
+        const Case cases[] = {
+            { "limited by biteSize",        5, 8, 50, 5 },
+            { "limited by the tile's food", 5, 8,  3, 3 },
+            { "limited by free room",       5, 2, 50, 2 },
+            { "a full worm eats nothing",   5, 0, 50, 0 },
+            { "a worm with bite 0",         0, 8, 50, 0 },
+            { "an empty tile",              5, 8,  0, 0 },
+        };
+        for (const Case& c : cases) {
+            World w = makeEater(c.bite, c.room, c.food);
+            const int energyBefore = w.orgs[0].energy;
+            const int64_t total = w.totalEnergy();
+            w.eatPhase();
+            check(s, w.orgs[0].energy == energyBefore + c.taken && w.grid.food[55] == c.food - c.taken,
+                std::string("eating: ") + c.name,
+                "took " + std::to_string(w.orgs[0].energy - energyBefore) + ", expected " + std::to_string(c.taken));
+            check(s, w.energyEaten == c.taken, std::string("energyEaten statistic: ") + c.name);
+            check(s, w.totalEnergy() == total && w.totalEnergy() == w.energyIn - w.energyOut,
+                std::string("eating moves energy without creating or destroying any: ") + c.name);
+        }
+    }
+
+    /** Only the head's tile is eaten; the tiles under the rest of the body are untouched. */
+    static void testOnlyTheHeadEats(Stats& s) {
+        World w = makeBase();
+        const size_t K = findWorm(w, 3);
+        check(s, K != w.orgs.size(), "setup: found a worm with >= 3 segments");
+        if (K == w.orgs.size()) return;
+        Organism& o = w.orgs[K];
+        const std::vector<int> cells(o.body.begin(), o.body.end());
+        for (int c : cells) setFood(w, size_t(c), 50);
+        setEnergy(w, o, 1);
+        o.genome.biteSize = 7;
+
+        w.eatPhase();
+
+        check(s, w.grid.food[size_t(cells[0])] == 43, "the head's tile lost exactly one bite");
+        bool rest = true;
+        for (size_t i = 1; i < cells.size(); ++i) rest = rest && (w.grid.food[size_t(cells[i])] == 50);
+        check(s, rest, "tiles under the rest of the body are untouched");
+        check(s, o.energy == 8, "the worm gained exactly one bite");
+    }
+
+    /** A dead worm does not eat. */
+    static void testDeadWormsDoNotEat(Stats& s) {
+        World w = makeBase();
+        const size_t K = findWorm(w, 1);
+        check(s, K != w.orgs.size(), "setup: found a living worm");
+        if (K == w.orgs.size()) return;
+        const size_t head = size_t(w.orgs[K].body.front());
+        w.kill(w.orgs[K]);
+        setFood(w, head, 60);
+
+        w.eatPhase();
+
+        check(s, w.grid.food[head] == 60, "a dead worm's former tile is not eaten");
+        check(s, w.orgs[K].energy == 0, "a dead worm gains no energy");
+    }
+
+    /** biteSize is drawn from BITE_MIN..BITE_MAX, and both ends of the range occur. */
+    static void testBiteGeneRange(Stats& s) {
+        std::mt19937 rng(99);
+        int lo = 1 << 30, hi = 0;
+        for (int i = 0; i < 2000; ++i) {
+            const Genome g = Genome::random(rng);
+            lo = std::min(lo, int(g.biteSize));
+            hi = std::max(hi, int(g.biteSize));
+        }
+        check(s, lo >= Tune::BITE_MIN && hi <= Tune::BITE_MAX, "random biteSize stays within BITE_MIN..BITE_MAX",
+            "saw " + std::to_string(lo) + ".." + std::to_string(hi));
+        check(s, lo == Tune::BITE_MIN && hi == Tune::BITE_MAX, "both ends of the bite range occur in 2000 draws");
+    }
+
+    /** In a live world worms really eat, gain energy, and the books still balance. */
+    static void testEatingInARunningWorld(Stats& s) {
+        World w(80, 60);
+        w.seedFood(Tune::FOOD_SEED_PERCENT);
+        w.spawnRandom(40);
+        const int64_t wormsBefore = w.wormEnergy();
+        for (int t = 0; t < 400; ++t) w.step();
+        check(s, w.energyEaten > 0, "worms ate something in 400 ticks");
+        check(s, w.wormEnergy() > wormsBefore, "the worms' combined energy rose from eating");
+        check(s, w.wormEnergy() + w.foodEnergy() == w.totalEnergy(), "wormEnergy + foodEnergy == totalEnergy");
+        check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger still balances after 400 ticks of eating");
+    }
+
     void runEnergyTests(Stats& s) {
         std::printf("[energy]\n");
         testFoodProductionRate(s);
@@ -230,6 +347,11 @@ namespace th {
         testDeathReturnsEnergyEvenly(s);
         testOverflowIsDissipatedAndCounted(s);
         testFoodBelongsToTheTile(s);
+        testEatingMovesEnergyFromTileToWorm(s);
+        testOnlyTheHeadEats(s);
+        testDeadWormsDoNotEat(s);
+        testBiteGeneRange(s);
+        testEatingInARunningWorld(s);
     }
 
 } // namespace th

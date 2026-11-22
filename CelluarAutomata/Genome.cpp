@@ -4,6 +4,7 @@
  *        documented in Genome.h.
  */
 #include "Genome.h"
+#include "Tuning.h"      // Tune::BITE_MIN, Tune::BITE_MAX
 
 Genome Genome::random(std::mt19937& rng) {
 	std::uniform_real_distribution<float> u01(0.0f, 1.0f);
@@ -16,5 +17,6 @@ Genome Genome::random(std::mt19937& rng) {
 	for (int i = 0; i < 6; ++i) g.moveWeight[i] = 0.05f + 0.5f * u01(rng);
 	static const int prefs[5] = { 0, 1, 2, 4, 5 };
 	g.moveWeight[prefs[rng() % 5]] += 3.0f;
+	g.biteSize = uint16_t(Tune::BITE_MIN + rng() % uint32_t(Tune::BITE_MAX - Tune::BITE_MIN + 1));
 	return g;
 }

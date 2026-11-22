@@ -41,7 +41,7 @@
   *                  mirror; never use it for simulation logic.
   *  I7  Phases.     DECIDE may mutate only the RNG and scratch buffers. RESOLVE
   *                  may mutate only scratch buffers and stats. APPLY and the phases
-  *                  after it (ENVIRONMENT now; EAT and METABOLISM later) are the
+  *                  after it (EAT and ENVIRONMENT now; METABOLISM later) are the
   *                  only phases that change world state.
   *  I8  Targets.    decide() only targets cells that are EMPTY in the snapshot,
   *                  and resolve gives each cell at most one winner, so APPLY
@@ -104,6 +104,10 @@ struct World {
     // becomes energy, and is counted in energyIn, only when a drop actually lands on a tile.
     int64_t foodAccum = 0;
 
+    // Statistic only, NOT part of the ledger: total energy ever moved from tiles into worms by
+    // eating. (Eating moves energy; it neither creates nor destroys any.)
+    int64_t energyEaten = 0;
+
     // scratch buffers reused every tick
     std::vector<Intent> intents, winners;
     std::vector<int> damage;
@@ -116,7 +120,7 @@ struct World {
      *       reproducible replay of an earlier run.
      * Called by: main (R key).
      */
-    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; energyIn = energyOut = 0; foodAccum = 0; }
+    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; energyIn = energyOut = 0; foodAccum = 0; energyEaten = 0; }
 
     /** @brief Number of organisms with alive == true. O(orgs). HUD only. */
     int aliveCount() const {
@@ -126,6 +130,34 @@ struct World {
     }
 
     // ---- helpers ----
+
+   /**
+     * @brief Create a single-cell worm at `cellIdx`.
+     * @param cellIdx Flat grid index. Must be in range [0, w*h); not checked.
+     * @param g       Genome to give the newborn.
+     * @return true if spawned; false if the cell was occupied.
+     * @post The new organism is orgs.back() with id = orgs.size(), one segment
+     *       (hp = Tune::SEGMENT_HP), random facing.
+     * Called by: main (click), spawnRandom.
+     * @warning May reallocate `orgs`, invalidating Organism references (I2).
+     *          Never call during step().
+     */
+    bool spawn(int cellIdx, const Genome& g);
+
+    /**
+     * @brief Try to spawn up to `count` single-cell worms at random empty cells.
+     * @param count Desired number of new worms.
+     *
+     * Makes at most count * 20 attempts, so it may spawn fewer than `count`
+     * when the grid is crowded. The cell and the genome are drawn in separate
+     * statements so the RNG draw order is defined (see I11).
+     *
+     * Called by: main (S key). Calls: Genome::random, spawn.
+     * @warning May reallocate `orgs` (I2); never call during step().
+     * @note For a given seed this produces a different layout than the old
+     *       version did. That is expected, because the draw order is now fixed.
+     */
+    void spawnRandom(int count);
 
     /**
      * @brief Write an organism's body into the grid (type, orgId, hp mirror).
@@ -158,6 +190,20 @@ struct World {
     int defensePower(const Organism& o) const;
 
     /**
+     * @brief Hand a worm's remaining energy back to the tiles it occupies.
+     * @param o The dying worm. Must still have its body (call BEFORE the body is cleared).
+     * @post o.energy == 0. Energy is split evenly over the body's tiles, with any
+     *       remainder going one unit at a time to the first segments (head first). A
+     *       tile only accepts up to Tune::FOOD_MAX; whatever does not fit is
+     *       dissipated and counted in energyOut, so the ledger stays exact.
+     * Mutates: grid.food, o.energy, energyOut.
+     * Called by: kill.
+     * @note A worm that starved has 0 energy and returns nothing; one killed in a
+     *       collision returns what it was holding.
+     */
+    void returnEnergyToTiles(Organism& o);
+
+    /**
      * @brief Remove a worm from the world.
      * @param o The organism to kill. Must be alive with a valid body.
      * @post All its cells are cleared on the grid, body and hp are emptied,
@@ -183,26 +229,18 @@ struct World {
     /**
      * @brief All energy currently in the world: every living worm's pool plus all
      *        food on all tiles.
-     * @return Sum as int64_t. O(orgs + w*h).
+     * @return wormEnergy() + foodEnergy() as int64_t. O(orgs + w*h).
      * @note The energy ledger says this must equal energyIn - energyOut at all times.
      *       Dead worms hold 0 by definition (see returnEnergyToTiles) and are not summed.
-     * Called by: validate (E2), the HUD (E5), tests.
+     * Called by: validate (E2), tests.
      */
     int64_t totalEnergy() const;
 
-    /**
-     * @brief Hand a worm's remaining energy back to the tiles it occupies.
-     * @param o The dying worm. Must still have its body (call BEFORE the body is cleared).
-     * @post o.energy == 0. Energy is split evenly over the body's tiles, with any
-     *       remainder going one unit at a time to the first segments (head first). A
-     *       tile only accepts up to Tune::FOOD_MAX; whatever does not fit is
-     *       dissipated and counted in energyOut, so the ledger stays exact.
-     * Mutates: grid.food, o.energy, energyOut.
-     * Called by: kill.
-     * @note A worm that starved has 0 energy and returns nothing; one killed in a
-     *       collision returns what it was holding.
-     */
-    void returnEnergyToTiles(Organism& o);
+    /** @brief Sum of the energy pools of all living worms. O(orgs). Called by: totalEnergy, the HUD, tests. */
+    int64_t wormEnergy() const;
+
+    /** @brief Sum of all food on all tiles. O(w*h). Called by: totalEnergy, the HUD, tests. */
+    int64_t foodEnergy() const;
 
     /**
      * @brief ENVIRONMENT phase: put new food on the ground.
@@ -230,32 +268,20 @@ struct World {
     void seedFood(int percentOfMax);
 
     /**
-     * @brief Create a single-cell worm at `cellIdx`.
-     * @param cellIdx Flat grid index. Must be in range [0, w*h); not checked.
-     * @param g       Genome to give the newborn.
-     * @return true if spawned; false if the cell was occupied.
-     * @post The new organism is orgs.back() with id = orgs.size(), one segment
-     *       (hp = Tune::SEGMENT_HP), random facing.
-     * Called by: main (click), spawnRandom.
-     * @warning May reallocate `orgs`, invalidating Organism references (I2).
-     *          Never call during step().
-     */
-    bool spawn(int cellIdx, const Genome& g);
-
-    /**
-     * @brief Try to spawn up to `count` single-cell worms at random empty cells.
-     * @param count Desired number of new worms.
+     * @brief EAT phase: every living worm's head eats from the tile it stands on.
      *
-     * Makes at most count * 20 attempts, so it may spawn fewer than `count`
-     * when the grid is crowded. The cell and the genome are drawn in separate
-     * statements so the RNG draw order is defined (see I11).
-     *
-     * Called by: main (S key). Calls: Genome::random, spawn.
-     * @warning May reallocate `orgs` (I2); never call during step().
-     * @note For a given seed this produces a different layout than the old
-     *       version did. That is expected, because the draw order is now fixed.
+     * For each living worm the amount taken is the smallest of: its genome's biteSize,
+     * the food on the head's tile, and its free room (energyCapacity - energy). The
+     * energy moves from the tile to the worm, so totalEnergy() does not change and
+     * nothing is added to the ledger. Only the head eats. Because of follow-the-leader
+     * movement the body segments stand on tiles the head just ate.
+     * Two heads never share a tile (I8), so there are no eating conflicts and the
+     * order of worms does not matter. Draws no random numbers.
+     * Mutates: o.energy for living worms, grid.food, energyEaten.
+     * Called by: step (after APPLY, before ENVIRONMENT). Calls: energyCapacity.
+     * @note Dead worms do not eat (including worms killed earlier in the same tick).
      */
-    void spawnRandom(int count);
+    void eatPhase();
 
     // ---- phase 1: DECIDE (reads the grid, mutates nothing but the RNG) ----
     /**
@@ -309,13 +335,14 @@ struct World {
      *             claimed by two or more worms.
      * 3. APPLY:   winners move; then damage is subtracted from head HP
      *             (hp[0]); worms with hp[0] <= 0 are killed.
-     * 4. ENVIRONMENT: new food appears on the ground (environmentPhase).
+     * 4. EAT:         living heads eat from their tile (eatPhase).
+     * 5. ENVIRONMENT: new food appears on the ground (environmentPhase).
      *
      * Losers do not move this tick. Update order does not affect the outcome
      * (aside from RNG draw order, which is deterministic).
-     * Mutates: grid, orgs, tick, contests, deaths, foodAccum, energyIn and the scratch buffers.
+     * Mutates: grid, orgs, tick, contests, deaths, foodAccum, energyIn, energyEaten, and the scratch buffers.
      * Called by: main's fixed-timestep loop. Calls: decide, attackPower,
-     * defensePower, applyMove, kill, retype, environmentPhase.
+     * defensePower, applyMove, kill, retype, eatPhase, environmentPhase.
      * @warning Do not call spawn() from inside this function (I2).
      */
     void step();

@@ -43,7 +43,6 @@ namespace Tune {
     static_assert(NEWBORN_ENERGY <= CAPACITY[T_HEAD], "a newborn is one head cell and its energy must fit in the capacity");
     static_assert(FOOD_MAX > 0 && FOOD_MAX <= 65535, "food is stored in a uint16_t");
 
-
     // ---- food production (World::environmentPhase) ----
     // FOOD_RATE is in milli-energy per tile per tick: 50 means 0.05 energy per tile per tick.
     // The world adds FOOD_RATE * (number of tiles) milli-energy to an accumulator every tick and
@@ -56,4 +55,13 @@ namespace Tune {
     static_assert(FOOD_RATE >= 0, "food rate cannot be negative");
     static_assert(FOOD_DROP > 0 && FOOD_DROP <= FOOD_MAX, "a drop must fit on a tile");
     static_assert(FOOD_SEED_PERCENT >= 0 && FOOD_SEED_PERCENT <= 100, "seed percent is 0..100");
+
+    // ---- eating (World::eatPhase) ----
+    // Each worm's genome has a biteSize: the most energy its head can take from the tile it
+    // stands on in one tick. Genome::random draws it uniformly from BITE_MIN..BITE_MAX.
+    // PLACEHOLDER values; they are calibrated once metabolism exists.
+    inline constexpr int BITE_MIN = 10;
+    inline constexpr int BITE_MAX = 30;
+
+    static_assert(BITE_MIN >= 1 && BITE_MIN <= BITE_MAX && BITE_MAX <= 65535, "bite range must be ordered and fit in a uint16_t");
 }
