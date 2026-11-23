@@ -18,5 +18,6 @@ Genome Genome::random(std::mt19937& rng) {
 	static const int prefs[5] = { 0, 1, 2, 4, 5 };
 	g.moveWeight[prefs[rng() % 5]] += 3.0f;
 	g.biteSize = uint16_t(Tune::BITE_MIN + rng() % uint32_t(Tune::BITE_MAX - Tune::BITE_MIN + 1));
+	g.growThreshold = uint8_t(Tune::GROW_THRESHOLD_MIN + rng() % uint32_t(Tune::GROW_THRESHOLD_MAX - Tune::GROW_THRESHOLD_MIN + 1));
 	return g;
 }

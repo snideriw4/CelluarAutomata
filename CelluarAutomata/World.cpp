@@ -8,6 +8,14 @@
 #include <algorithm>   // std::sort, std::max, std::clamp
 #include "Tuning.h"    // Tune::SEGMENT_HP, SIZE_BONUS, JITTER, ATTACK, DEFENSE
 
+void World::clear() { 
+    grid.clear(); orgs.clear(); 
+    tick = 0; contests = deaths = 0; 
+    energyIn = energyOut = 0; 
+    foodAccum = 0; energyEaten = 0; 
+    segmentsGrown = 0; 
+}
+
 bool World::spawn(int cellIdx, const Genome& g) {
     if (grid.type[cellIdx] != T_EMPTY) return false;
     Organism o;
@@ -182,13 +190,20 @@ bool World::decide(const Organism& o, uint32_t id, Intent& out) {
 }
 
 void World::applyMove(Organism& o, uint32_t id, const Intent& in) {
-    bool grow = int(o.body.size()) < o.genome.targetLength
+    // Growing is allowed by length and timing, and must be paid for out of the worm's own energy.
+    const bool wantsToGrow = int(o.body.size()) < o.genome.targetLength
         && (tick % o.genome.growInterval == 0);
+    const bool grow = wantsToGrow
+        && o.energy - Tune::GROW_COST >= 1
+        && o.energy * 100 >= int(o.genome.growThreshold) * energyCapacity(o);
 
     o.body.push_front(in.target);
     o.facing = (o.facing + in.rel) % 6;
     if (grow) {
         o.hp.push_back(Tune::SEGMENT_HP);       // new segment appended at the tail end
+        o.energy -= Tune::GROW_COST;            // the worm pays for the new segment ...
+        energyOut += Tune::GROW_COST;           // ... and that energy is destroyed (ledger)
+        ++segmentsGrown;
     }
     else {
         grid.clearCell(o.body.back());
@@ -303,6 +318,8 @@ std::string World::validate() const {
         if (o.body.size() > g.targetLength)
             return who + ": has " + std::to_string(o.body.size()) +
             " segments, more than genome.targetLength " + std::to_string(int(g.targetLength));
+        if (g.growThreshold > 100)
+            return who + ": genome.growThreshold " + std::to_string(int(g.growThreshold)) + " is above 100 (I10)";
 
         const int len = int(o.body.size());
         for (int i = 0; i < len; ++i) {

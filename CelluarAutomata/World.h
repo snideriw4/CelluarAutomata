@@ -108,6 +108,9 @@ struct World {
     // eating. (Eating moves energy; it neither creates nor destroys any.)
     int64_t energyEaten = 0;
 
+    // Statistic only: how many segments worms have ever added (each cost Tune::GROW_COST).
+    uint64_t segmentsGrown = 0;
+
     // scratch buffers reused every tick
     std::vector<Intent> intents, winners;
     std::vector<int> damage;
@@ -120,7 +123,7 @@ struct World {
      *       reproducible replay of an earlier run.
      * Called by: main (R key).
      */
-    void clear() { grid.clear(); orgs.clear(); tick = 0; contests = deaths = 0; energyIn = energyOut = 0; foodAccum = 0; energyEaten = 0; }
+    void clear();
 
     /** @brief Number of organisms with alive == true. O(orgs). HUD only. */
     int aliveCount() const {
@@ -220,9 +223,9 @@ struct World {
      *        every segment's current type.
      * @return Non-negative integer. Pure function, O(body length).
      * Called by: validate (E2), and the eating/growth steps (E4/E6).
-     * @note Capacity changes when the worm grows (segment types are derived from
-     *       length, see I4). Keep Tune::CAPACITY[T_TAIL] no larger than the capacity
-     *       of any pattern type, or clamp energy when a segment is added.
+     * @note Adding a segment never lowers capacity: the old tail slot becomes a pattern
+     *       segment and a new tail is added, so capacity grows by the pattern type's
+     *       capacity (>= 0).
      */
     int energyCapacity(const Organism& o) const;
 
@@ -311,19 +314,22 @@ struct World {
      * @param id Its organism id (index + 1).
      * @param in Its winning intent (target must be empty and adjacent to head).
      *
-     * Pushes the target as the new head and updates facing. If the worm is
-     * below its target length and tick % growInterval == 0 it grows: hp gets a
-     * new segment at the BACK and the tail cell is kept. Otherwise the tail
-     * cell is cleared and popped. Then retype() refreshes the grid.
+     * Pushes the target as the new head and updates facing. The worm GROWS if all of
+     * these hold: it is below its target length; tick % growInterval == 0; it would
+     * still have at least 1 energy after paying Tune::GROW_COST; and its energy is at
+     * least growThreshold percent of its capacity. Growing keeps the tail cell, adds a
+     * segment to hp at the BACK, takes GROW_COST from the worm's pool and counts it in
+     * energyOut (the energy is destroyed). Otherwise the tail cell is cleared and
+     * popped. Then retype() refreshes the grid. A worm that cannot move cannot grow.
      *
      * @note The asymmetry (body grows at the front, hp at the back) is
      *       deliberate: body holds positions, hp is indexed by segment (I3).
-     * Reads: tick, o.genome. Writes: o.body, o.hp, o.facing, grid.
-     * Called by: step (APPLY). Calls: HexGrid::clearCell, retype.
+     * Reads: tick, o.genome. Writes: o.body, o.hp, o.energy, o.facing, grid, segmentsGrown, energyOut.
+     * Called by: step (APPLY). Calls: HexGrid::clearCell, retype, energyCapacity.
      * @warning Only valid for intents that won RESOLVE (see I8).
      */
     void applyMove(Organism& o, uint32_t id, const Intent& in);
-
+      
     /**
      * @brief Advance the world by one tick.
      *
@@ -346,7 +352,6 @@ struct World {
      * @warning Do not call spawn() from inside this function (I2).
      */
     void step();
-
 
     // ---- diagnostics ----
     /**

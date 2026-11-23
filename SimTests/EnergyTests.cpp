@@ -337,6 +337,117 @@ namespace th {
         check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger still balances after 400 ticks of eating");
     }
 
+    /**
+     * @brief One single-cell worm in the middle of an empty 20x20 world, full of energy, with the
+     *        given growth settings (growInterval 1, so only energy and length decide).
+     */
+    static World makeGrower(int targetLength, int thresholdPercent) {
+        World w(20, 20);
+        Genome g;
+        g.targetLength = uint8_t(targetLength);
+        g.growInterval = 1;
+        g.growThreshold = uint8_t(thresholdPercent);
+        w.spawn(w.grid.idx(10, 10), g);
+        setEnergy(w, w.orgs[0], w.energyCapacity(w.orgs[0]));
+        return w;
+    }
+
+    /** @brief Make worm 1 take one step straight ahead, exactly as if it had won its contest. */
+    static void stepStraight(World& w) {
+        Organism& o = w.orgs[0];
+        const Intent in{ 1u, 0, w.grid.neighbor(o.body.front(), o.facing), 0.0f };
+        w.applyMove(o, 1u, in);
+    }
+
+    /** Growing costs energy: the pool is drawn down, the cost is destroyed, and the books balance. */
+    static void testGrowthCostsEnergy(Stats& s) {
+        World w = makeGrower(5, 0);
+        const int before = w.orgs[0].energy;
+        stepStraight(w);
+        check(s, w.orgs[0].body.size() == 2, "a rich worm grows by one segment when it steps");
+        check(s, w.orgs[0].energy == before - Tune::GROW_COST, "growing took exactly GROW_COST from the pool");
+        check(s, w.energyOut == Tune::GROW_COST && w.segmentsGrown == 1, "the cost is counted as destroyed energy");
+        check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger balances after a growth step");
+    }
+
+    /** A worm must keep at least 1 energy: with exactly GROW_COST it moves but does not grow. */
+    static void testCannotGrowWithoutEnoughEnergy(Stats& s) {
+        World w = makeGrower(5, 0);
+        setEnergy(w, w.orgs[0], Tune::GROW_COST);
+        const int head = w.orgs[0].body.front();
+        stepStraight(w);
+        check(s, w.orgs[0].body.size() == 1, "a worm with only GROW_COST energy does not grow");
+        check(s, w.orgs[0].body.front() != head, "...but it still moves");
+        check(s, w.orgs[0].energy == Tune::GROW_COST && w.segmentsGrown == 0, "...and pays nothing");
+
+        World r = makeGrower(5, 0);
+        setEnergy(r, r.orgs[0], Tune::GROW_COST + 1);
+        stepStraight(r);
+        check(s, r.orgs[0].body.size() == 2 && r.orgs[0].energy == 1, "with GROW_COST + 1 it grows and is left with exactly 1");
+    }
+
+    /** growThreshold: energy must be at least that percent of capacity. */
+    static void testGrowthThreshold(Stats& s) {
+        World full = makeGrower(5, 100);                       // must be completely full
+        const int cap = full.energyCapacity(full.orgs[0]);
+        stepStraight(full);
+        check(s, full.orgs[0].body.size() == 2, "threshold 100%: a full worm grows");
+
+        World nearly = makeGrower(5, 100);
+        setEnergy(nearly, nearly.orgs[0], cap - 1);
+        stepStraight(nearly);
+        check(s, nearly.orgs[0].body.size() == 1, "threshold 100%: a worm one short of full does not grow");
+
+        World half = makeGrower(5, 50);
+        setEnergy(half, half.orgs[0], cap / 2 - 1);
+        stepStraight(half);
+        check(s, half.orgs[0].body.size() == 1, "threshold 50%: just under half does not grow");
+    }
+
+    /** The timer still limits growth rate, and the target length still caps it. */
+    static void testGrowthTimerAndTargetLength(Stats& s) {
+        World w = makeGrower(5, 0);
+        w.orgs[0].genome.growInterval = 2;
+        w.tick = 1;
+        stepStraight(w);
+        check(s, w.orgs[0].body.size() == 1, "off the growInterval tick the worm does not grow");
+        w.tick = 2;
+        stepStraight(w);
+        check(s, w.orgs[0].body.size() == 2, "on a growInterval tick it grows");
+
+        World done = makeGrower(1, 0);
+        stepStraight(done);
+        check(s, done.orgs[0].body.size() == 1 && done.segmentsGrown == 0, "a worm at its target length never grows");
+    }
+
+    /** growThreshold is drawn from GROW_THRESHOLD_MIN..MAX, and both ends occur. */
+    static void testGrowThresholdGeneRange(Stats& s) {
+        std::mt19937 rng(123);
+        int lo = 1000, hi = -1;
+        for (int i = 0; i < 2000; ++i) {
+            const Genome g = Genome::random(rng);
+            lo = std::min(lo, int(g.growThreshold));
+            hi = std::max(hi, int(g.growThreshold));
+        }
+        check(s, lo >= Tune::GROW_THRESHOLD_MIN && hi <= Tune::GROW_THRESHOLD_MAX, "random growThreshold stays within its range",
+            "saw " + std::to_string(lo) + ".." + std::to_string(hi));
+        check(s, lo == Tune::GROW_THRESHOLD_MIN && hi == Tune::GROW_THRESHOLD_MAX, "both ends of the range occur in 2000 draws");
+    }
+
+    /** In a live world worms grow, never past their target, and every segment was paid for. */
+    static void testGrowthInARunningWorld(Stats& s) {
+        World w(80, 60);
+        w.seedFood(Tune::FOOD_SEED_PERCENT);
+        w.spawnRandom(40);
+        for (int t = 0; t < 300; ++t) w.step();
+        bool withinTarget = true;
+        for (const Organism& o : w.orgs) if (o.alive) withinTarget = withinTarget && int(o.body.size()) <= o.genome.targetLength;
+        check(s, w.segmentsGrown > 0, "worms grew in 300 ticks");
+        check(s, withinTarget, "no worm is longer than its target length");
+        check(s, w.energyOut >= int64_t(w.segmentsGrown) * Tune::GROW_COST, "every segment grown was paid for in the ledger");
+        check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger balances after 300 ticks of growth");
+    }
+
     void runEnergyTests(Stats& s) {
         std::printf("[energy]\n");
         testFoodProductionRate(s);
@@ -352,6 +463,12 @@ namespace th {
         testDeadWormsDoNotEat(s);
         testBiteGeneRange(s);
         testEatingInARunningWorld(s);
+        testGrowthCostsEnergy(s);
+        testCannotGrowWithoutEnoughEnergy(s);
+        testGrowthThreshold(s);
+        testGrowthTimerAndTargetLength(s);
+        testGrowThresholdGeneRange(s);
+        testGrowthInARunningWorld(s);
     }
 
 } // namespace th

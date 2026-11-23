@@ -64,4 +64,19 @@ namespace Tune {
     inline constexpr int BITE_MAX = 50;
 
     static_assert(BITE_MIN >= 1 && BITE_MIN <= BITE_MAX && BITE_MAX <= 65535, "bite range must be ordered and fit in a uint16_t");
+
+    // ---- growth (World::applyMove) ----
+    // Adding a segment costs GROW_COST energy from the worm's own pool. That energy is destroyed
+    // (counted in energyOut). A worm may only grow if it still has at least 1 energy afterwards
+    // AND its energy is at least its genome's growThreshold percent of its capacity.
+    // Genome::random draws growThreshold uniformly from GROW_THRESHOLD_MIN..GROW_THRESHOLD_MAX.
+    // PLACEHOLDER values; they are calibrated once metabolism exists.
+    inline constexpr int GROW_COST = 10;
+    inline constexpr int GROW_THRESHOLD_MIN = 30;
+    inline constexpr int GROW_THRESHOLD_MAX = 90;
+
+    static_assert(GROW_COST >= 0, "growth cost cannot be negative");
+    static_assert(NEWBORN_ENERGY - GROW_COST >= 1, "a newborn must be able to afford its first segment");
+    static_assert(GROW_THRESHOLD_MIN >= 0 && GROW_THRESHOLD_MIN <= GROW_THRESHOLD_MAX && GROW_THRESHOLD_MAX <= 100,
+        "growth threshold is a percentage: 0..100 and ordered");
 }

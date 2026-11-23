@@ -120,6 +120,7 @@ namespace th {
             { "genome.period = 5",               "genome.period",            [&](World& w) { w.orgs[K].genome.period = 5; } },
             { "genome.growInterval = 0",         "growInterval",             [&](World& w) { w.orgs[K].genome.growInterval = 0; } },
             { "genome.targetLength = 0",         "targetLength is 0",        [&](World& w) { w.orgs[K].genome.targetLength = 0; } },
+            { "genome.growThreshold above 100",  "growThreshold",            [&](World& w) { w.orgs[K].genome.growThreshold = 101; } },
             { "body longer than targetLength",   "more than genome.target",  [&](World& w) { w.orgs[K].genome.targetLength = 2; } },
             { "tail type = empty",               "invalid cell type",        [&](World& w) { w.orgs[K].genome.tailType = T_EMPTY; } },
             { "facing out of range",             "facing",                   [&](World& w) { w.orgs[K].facing = 9; } },

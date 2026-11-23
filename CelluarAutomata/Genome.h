@@ -14,13 +14,14 @@
  * @brief Heritable description of a worm's body plan and behavior.
  *
  * Body plan: head type, tail type, a repeating `pattern[0..period-1]` for the
- * middle segments, and a `targetLength` to grow to, adding one segment every
- * `growInterval` ticks. Behavior: `moveWeight[]` (preferred direction relative
+ * middle segments, and a `targetLength` to grow to, It may add one segment at most 
+ * every growInterval ticks, and only when it can pay for it (growThreshold, see 
+ * World::applyMove). Behavior: `moveWeight[]` (preferred direction relative
  * to facing: 0 straight, 1 60L, 2 120L, 3 backward, 4 120R, 5 60R) and
  * `agility` (contest strength, see World::decide), and `biteSize` (the most energy
  * the head eats from its tile per tick, see World::eatPhase).
  *
- * @warning Must satisfy I10 (period 1..4, growInterval >= 1, targetLength >= 1).
+ * @warning Must satisfy I10 (period 1..4, growInterval >= 1, targetLength >= 1, growThreshold <= 100).
  * @note A default-constructed Genome is valid.
  */
 struct Genome {
@@ -29,7 +30,8 @@ struct Genome {
     uint8_t period = 1;                 // length of repeating body pattern (1..4)
     uint8_t pattern[4] = { T_MOVER, T_MOVER, T_MOVER, T_MOVER };
     uint8_t targetLength = 10;
-    uint8_t growInterval = 2;
+    uint8_t growInterval = 2;           // a segment can be added at most on every growInterval-th tick
+    uint8_t growThreshold = 50;         // growth needs energy >= this percent of capacity (and GROW_COST affordable)
     float   agility = 1.0f;             // contest strength when two heads want the same cell
     uint16_t biteSize = 20;             // most energy the head can eat from its tile in one tick (0 = cannot eat)
     // Movement preference relative to facing: 0 straight, 1 60L, 2 120L,
@@ -57,13 +59,14 @@ struct Genome {
     /**
      * @brief Build a random genome.
      * @param rng The world's RNG (advanced by this call; see I11).
-     * @return Genome with period 1..4, targetLength 10..34, growInterval 1..4,
+     * @return Genome with period 1..4, targetLength 3..10, growInterval 1..4,
      *         agility 0..3, all four pattern slots random from MOVER..OFFENSE
      *         (only the first `period` are used), and moveWeights of 0.05..0.55
      *         plus a +3 bonus on one of {0,1,2,4,5} so each worm has a clear
      *         dominant tendency. Backward (3) is never the dominant direction.
      *         biteSize uniform in Tune::BITE_MIN..BITE_MAX (drawn last, so the draws
-     *         above are unchanged).
+     *         above are unchanged), and growThreshold uniform in 
+     *         Tune::GROW_THRESHOLD_MIN..MAX (both drawn last).
      * Called by: main (click spawn), World::spawnRandom.
      */
     static Genome random(std::mt19937& rng);
