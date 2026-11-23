@@ -342,15 +342,15 @@ std::string World::validate() const {
                 return seg + " at " + cellStr(c) + ": grid hp mirror is " +
                 std::to_string(int(grid.hp[size_t(c)])) + " but segment hp is " +
                 std::to_string(o.hp[size_t(i)]) + " (I5/I6)";
-
-            // Energy pool (I13). Checked AFTER the segment loop because energyCapacity()
-            // indexes Tune::CAPACITY by segment type, which is only safe once every type
-            // has been validated above.
-            const int capacity = energyCapacity(o);
-            if (o.energy < 1 || o.energy > capacity)
-                return who + ": energy " + std::to_string(o.energy) + " is outside 1.." +
-                std::to_string(capacity) + " (I13)";
         }
+
+        // Energy pool (I13). Checked AFTER the segment loop because energyCapacity()
+        // indexes Tune::CAPACITY by segment type, which is only safe once every type
+        // has been validated above.
+        const int capacity = energyCapacity(o);
+        if (o.energy < 1 || o.energy > capacity)
+            return who + ": energy " + std::to_string(o.energy) + " is outside 1.." +
+            std::to_string(capacity) + " (I13)";
     }
 
     // ---- C. grid sweep ----
