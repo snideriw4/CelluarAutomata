@@ -40,9 +40,8 @@
   *                  Organism::body / Organism::hp. grid.hp is a render-only
   *                  mirror; never use it for simulation logic.
   *  I7  Phases.     DECIDE may mutate only the RNG and scratch buffers. RESOLVE
-  *                  may mutate only scratch buffers and stats. APPLY and the phases
-  *                  after it (EAT and ENVIRONMENT now; METABOLISM later) are the
-  *                  only phases that change world state.
+  *                  may mutate only scratch buffers and stats. APPLY, EAT, METABOLISM,
+  *                  and ENVIRONMENT - are the only phases that change world state.
   *  I8  Targets.    decide() only targets cells that are EMPTY in the snapshot,
   *                  and resolve gives each cell at most one winner, so APPLY
   *                  moves can never overlap. Letting a head target an occupied
@@ -64,7 +63,7 @@
   *                  invariant here, change validate() in the same commit.
   *  I13 Energy pool. A living worm has 1 <= energy <= energyCapacity() (the sum of
   *                  Tune::CAPACITY over its segments); a dead worm has energy == 0.
-  *                  A worm whose energy reaches 0 must die (starvation, from E3 on).
+  *                  A worm whose energy reaches 0 dies in that same tick (starvation).
   *  I14 Food.       Every tile holds 0..Tune::FOOD_MAX food. Food belongs to the
   *                  tile: HexGrid::clearCell never touches it, and a tile with food
   *                  is still T_EMPTY for movement. The production carry-over
@@ -94,11 +93,12 @@ struct World {
 
     // stats for the HUD
     uint64_t contests = 0, deaths = 0;
+    uint64_t starvations = 0;   // deaths caused by running out of energy (a subset of `deaths`)
 
     // Energy ledger. Every unit of energy that enters or leaves the world must be counted here,
     // so that  totalEnergy() == energyIn - energyOut  holds at all times.
     int64_t energyIn = 0;   // created: newborn endowments (later: food production)
-    int64_t energyOut = 0;   // destroyed: heat (later), food that did not fit on a tile, ...
+    int64_t energyOut = 0;   // destroyed: upkeep, growth costs, food that did not fit on a tile, ...
 
     // Food production carry-over, in milli-energy (see environmentPhase). Not energy yet: it
     // becomes energy, and is counted in energyIn, only when a drop actually lands on a tile.
@@ -286,6 +286,22 @@ struct World {
      */
     void eatPhase();
 
+    /** @brief Energy a worm must pay per tick: the sum of Tune::UPKEEP over its segments' types. Pure; O(length). */
+    int upkeepCost(const Organism& o) const;
+
+    /**
+     * @brief METABOLISM phase: every living worm pays its upkeep; worms left with no energy starve.
+     *
+     * Each living worm pays min(upkeepCost, energy). The payment is destroyed (added to
+     * energyOut), so the ledger stays exact. A worm whose energy is then 0 is killed and
+     * counted in `starvations`; a starved worm returns nothing to the tiles (it has none).
+     * Runs AFTER eatPhase on purpose: a worm that lands on food can eat before it pays.
+     * Draws no random numbers.
+     * Mutates: o.energy, energyOut, starvations, and (via kill) the grid and organism.
+     * Called by: step (after EAT, before ENVIRONMENT). Calls: upkeepCost, kill.
+     */
+    void metabolismPhase();
+
     // ---- phase 1: DECIDE (reads the grid, mutates nothing but the RNG) ----
     /**
      * @brief DECIDE phase: pick this worm's desired move from the current grid.
@@ -342,7 +358,8 @@ struct World {
      * 3. APPLY:   winners move; then damage is subtracted from head HP
      *             (hp[0]); worms with hp[0] <= 0 are killed.
      * 4. EAT:         living heads eat from their tile (eatPhase).
-     * 5. ENVIRONMENT: new food appears on the ground (environmentPhase).
+     * 5. METABOLISM: every living worm pays upkeep; worms with 0 energy starve.
+     * 6. ENVIRONMENT: new food appears on the ground (environmentPhase).
      *
      * Losers do not move this tick. Update order does not affect the outcome
      * (aside from RNG draw order, which is deterministic).
@@ -374,7 +391,8 @@ struct World {
      *   C. grid sweep: empty cells carry orgId 0 and hp 0, and every occupied
      *      cell belongs to a living worm's body (no orphan cells) (I5/I6); no
      *      tile holds more than Tune::FOOD_MAX food (I14)
-     *   D. bookkeeping: `deaths` equals the number of dead organisms
+     *   D. bookkeeping: `deaths` equals the number of dead organisms, and
+     *      `starvations` never exceeds `deaths`
      *   E. energy ledger: both counters are non-negative and totalEnergy()
      *      equals energyIn - energyOut (I15)
      *   F. food production carry-over `foodAccum` is within 0..FOOD_DROP*1000-1 (I14)

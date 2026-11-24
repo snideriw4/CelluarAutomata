@@ -145,8 +145,8 @@ int main() {
             DrawPolyLinesEx(layout.center(hc, hr), 6, layout.R, 30.0f, 2.0f / cam.zoom, WHITE);
         EndMode2D();
 
-        const std::string hud = std::format("Tick {}  Alive {}/{}  Contests {}  Deaths {}  Food {}  Worms {}  {:.1f} t/s {}  View: {}",
-            world.tick, world.aliveCount(), world.orgs.size(), world.contests, world.deaths,
+        const std::string hud = std::format("Tick {}  Alive {}/{}  Contests {}  Deaths {} (starved {})  Food {}  Worms {}  {:.1f} t/s {}  View: {}",
+            world.tick, world.aliveCount(), world.orgs.size(), world.contests, world.deaths, world.starvations,
             world.foodEnergy(), world.wormEnergy(), ticksPerSec, paused ? "[PAUSED]" : "", VIEW_NAMES[view]);
         DrawText(hud.c_str(), 10, 10, 20, RAYWHITE);
         DrawText("Click: spawn | S: spawn 20 | Space: pause | Up/Down: speed | Tab: view | R: clear",

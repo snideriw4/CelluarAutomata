@@ -69,6 +69,7 @@ namespace th {
     static void testCorruptionIsDetected(Stats& s) {
         World base(30, 20);
         base.rng.seed(7);
+        base.seedFood(100);                     // worms must have food, or they starve before the test starts
         base.spawnRandom(10);
         for (int t = 0; t < 60; ++t) base.step();
 
@@ -131,13 +132,13 @@ namespace th {
             { "energy above capacity",           "outside 1..",               [&](World& w) { w.orgs[K].energy = w.energyCapacity(w.orgs[K]) + 1; } },
             { "dead worm still holds energy",    "dead but still holds energy", [&](World& w) { w.kill(w.orgs[K]); w.orgs[K].energy = 5; } },
             { "food above FOOD_MAX",             "above FOOD_MAX",            [&](World& w) { w.grid.food[size_t(emptyCell)] = uint16_t(Tune::FOOD_MAX + 1); } },
-            { "tile food changed, no ledger",    "energy ledger broken",      [&](World& w) {
-                uint16_t& f = w.grid.food[size_t(emptyCell)];
-                f = uint16_t(f < Tune::FOOD_MAX ? f + 1 : f - 1); } },
+            { "tile food changed, no ledger",    "energy ledger broken",      [&](World& w) { uint16_t& f = w.grid.food[size_t(emptyCell)]; 
+                                                                                              f = uint16_t(f < Tune::FOOD_MAX ? f + 1 : f - 1); } },
             { "worm energy changed, no ledger",  "energy ledger broken",      [&](World& w) { w.orgs[K].energy = (w.orgs[K].energy == 1) ? 2 : 1; } },
             { "energyIn tampered",               "energy ledger broken",      [&](World& w) { w.energyIn += 1; } },
             { "energyOut tampered",              "energy ledger broken",      [&](World& w) { w.energyOut += 1; } },
             { "negative ledger counter",         "counters are negative",     [&](World& w) { w.energyOut = -1; } },
+            { "starvations exceed deaths",         "starvations counter",      [&](World& w) { w.starvations = w.deaths + 1; } },
             { "food accumulator negative",       "food accumulator",          [&](World& w) { w.foodAccum = -1; } },
             { "food accumulator too large",      "food accumulator",          [&](World& w) { w.foodAccum = int64_t(Tune::FOOD_DROP) * 1000; } },
         };

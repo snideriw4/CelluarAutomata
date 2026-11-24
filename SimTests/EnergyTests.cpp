@@ -27,6 +27,7 @@ namespace th {
     static World makeBase() {
         World w(30, 20);
         w.rng.seed(7);
+        w.seedFood(100);                     // worms must have food, or they starve before the test starts
         w.spawnRandom(10);
         for (int t = 0; t < 60; ++t) w.step();
         return w;
@@ -448,6 +449,94 @@ namespace th {
         check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger balances after 300 ticks of growth");
     }
 
+    /** @brief A worm that never moves (every direction weighted 0), standing on tile 55 of a 10x10 world. */
+    static World makeFrozenWorm(int bite) {
+        World w(10, 10);
+        Genome g;
+        for (float& x : g.moveWeight) x = 0.0f;
+        g.biteSize = uint16_t(bite);
+        w.spawn(55, g);
+        return w;
+    }
+
+    /** Upkeep is paid out of the worm's pool and destroyed, and the books balance. */
+    static void testUpkeepIsPaidAndDestroyed(Stats& s) {
+        World w = makeEater(10, 5, 0);                 // single head, energy = capacity - 5, no food
+        const int before = w.orgs[0].energy;
+        const int64_t outBefore = w.energyOut;
+        w.metabolismPhase();
+        check(s, w.orgs[0].alive && w.orgs[0].energy == before - Tune::UPKEEP[T_HEAD], "a worm pays its upkeep out of its pool");
+        check(s, w.energyOut - outBefore == Tune::UPKEEP[T_HEAD], "the upkeep is counted as destroyed energy");
+        check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger balances after paying upkeep");
+    }
+
+    /** Upkeep is the sum of Tune::UPKEEP over the body's segment types. */
+    static void testUpkeepSumsOverTheBody(Stats& s) {
+        World w = makeBase();
+        const size_t K = findWorm(w, 4);
+        check(s, K != w.orgs.size(), "setup: found a worm with >= 4 segments");
+        if (K == w.orgs.size()) return;
+        Organism& o = w.orgs[K];
+        const int len = int(o.body.size());
+        int expected = 0;
+        for (int i = 0; i < len; ++i) expected += Tune::UPKEEP[o.genome.typeAt(i, len)];
+        check(s, w.upkeepCost(o) == expected, "upkeepCost is the sum over the body", "got " + std::to_string(w.upkeepCost(o)) + ", expected " + std::to_string(expected));
+
+        setEnergy(w, o, w.energyCapacity(o));
+        const int before = o.energy;
+        w.metabolismPhase();
+        check(s, o.energy == before - expected, "the whole body's upkeep is deducted in one tick");
+    }
+
+    /** A worm that cannot pay dies: nothing is returned to its tiles and the counters agree. */
+    static void testStarvationKillsAndReturnsNothing(Stats& s) {
+        if (Tune::UPKEEP[T_HEAD] <= 0) { check(s, false, "test needs a positive head upkeep"); return; }
+        World w = makeEater(10, 0, 0);
+        setEnergy(w, w.orgs[0], Tune::UPKEEP[T_HEAD]);   // exactly one tick of upkeep left
+        const int64_t outBefore = w.energyOut;
+        w.metabolismPhase();
+        check(s, !w.orgs[0].alive && w.orgs[0].body.empty(), "a worm with no energy left starves");
+        check(s, w.starvations == 1 && w.deaths == 1, "the death is counted as a starvation");
+        check(s, w.grid.food[55] == 0 && w.grid.type[55] == T_EMPTY, "a starved worm leaves no food and frees its tile");
+        check(s, w.energyOut - outBefore == Tune::UPKEEP[T_HEAD], "it paid what it had before dying");
+        check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger balances after a starvation");
+        check(s, w.validate().empty(), "the world is valid after a starvation", w.validate());
+    }
+
+    /** EAT runs before METABOLISM: a worm standing on food eats first, so it survives. */
+    static void testWormsEatBeforeTheyPay(Stats& s) {
+        if (Tune::UPKEEP[T_HEAD] <= 0) { check(s, false, "test needs a positive head upkeep"); return; }
+        World w = makeFrozenWorm(10);
+        setEnergy(w, w.orgs[0], Tune::UPKEEP[T_HEAD]);   // would starve if it had to pay first
+        setFood(w, 55, 50);
+        w.step();
+        check(s, w.orgs[0].alive, "a worm on food eats before it pays upkeep, so it survives");
+        check(s, w.orgs[0].energy == 10, "it ate one bite (10) and paid its upkeep",
+            "energy is " + std::to_string(w.orgs[0].energy));
+    }
+
+    /** A worm that cannot move cannot find food, so it eventually starves: the trapped-worm fate. */
+    static void testTrappedWormStarves(Stats& s) {
+        World w = makeFrozenWorm(10);
+        setFood(w, 55, 0);
+        int ticks = 0;
+        while (w.orgs[0].alive && ticks < 400) { w.step(); ++ticks; }
+        check(s, !w.orgs[0].alive, "a worm that cannot move starves", "still alive after 400 ticks");
+        check(s, w.starvations == 1 && w.deaths == 1, "and it is counted as a starvation");
+        check(s, w.validate().empty(), "the world is valid afterwards", w.validate());
+    }
+
+    /** In a live world worms starve, the counters agree, and the ledger balances. */
+    static void testStarvationInARunningWorld(Stats& s) {
+        World w(80, 60);
+        w.seedFood(Tune::FOOD_SEED_PERCENT);
+        w.spawnRandom(40);
+        for (int t = 0; t < 1500; ++t) w.step();
+        check(s, w.starvations > 0, "some worms starved in 1500 ticks");
+        check(s, w.starvations <= w.deaths, "starvations never exceed deaths");
+        check(s, w.totalEnergy() == w.energyIn - w.energyOut, "the ledger balances after 1500 ticks of metabolism");
+    }
+
     void runEnergyTests(Stats& s) {
         std::printf("[energy]\n");
         testFoodProductionRate(s);
@@ -469,6 +558,12 @@ namespace th {
         testGrowthTimerAndTargetLength(s);
         testGrowThresholdGeneRange(s);
         testGrowthInARunningWorld(s);
+        testUpkeepIsPaidAndDestroyed(s);
+        testUpkeepSumsOverTheBody(s);
+        testStarvationKillsAndReturnsNothing(s);
+        testWormsEatBeforeTheyPay(s);
+        testTrappedWormStarves(s);
+        testStarvationInARunningWorld(s);
     }
 
 } // namespace th

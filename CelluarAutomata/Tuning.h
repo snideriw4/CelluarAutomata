@@ -37,12 +37,6 @@ namespace Tune {
     //                               EMPTY HEAD MOVER STOR DEF OFF TAIL
     inline constexpr int CAPACITY[] = { 0,  20,  10,   50,  0, 0, 10 };
 
-    static_assert(sizeof(ATTACK) / sizeof(ATTACK[0]) == T_COUNT, "ATTACK needs one entry per CellType");
-    static_assert(sizeof(DEFENSE) / sizeof(DEFENSE[0]) == T_COUNT, "DEFENSE needs one entry per CellType");
-    static_assert(sizeof(CAPACITY) / sizeof(CAPACITY[0]) == T_COUNT, "CAPACITY needs one entry per CellType");
-    static_assert(NEWBORN_ENERGY <= CAPACITY[T_HEAD], "a newborn is one head cell and its energy must fit in the capacity");
-    static_assert(FOOD_MAX > 0 && FOOD_MAX <= 65535, "food is stored in a uint16_t");
-
     // ---- food production (World::environmentPhase) ----
     // FOOD_RATE is in milli-energy per tile per tick: 50 means 0.05 energy per tile per tick.
     // The world adds FOOD_RATE * (number of tiles) milli-energy to an accumulator every tick and
@@ -52,18 +46,12 @@ namespace Tune {
     inline constexpr int FOOD_DROP = 10;
     inline constexpr int FOOD_SEED_PERCENT = 30;   // World::seedFood: each tile gets a random 0..30% of FOOD_MAX
 
-    static_assert(FOOD_RATE >= 0, "food rate cannot be negative");
-    static_assert(FOOD_DROP > 0 && FOOD_DROP <= FOOD_MAX, "a drop must fit on a tile");
-    static_assert(FOOD_SEED_PERCENT >= 0 && FOOD_SEED_PERCENT <= 100, "seed percent is 0..100");
-
     // ---- eating (World::eatPhase) ----
     // Each worm's genome has a biteSize: the most energy its head can take from the tile it
     // stands on in one tick. Genome::random draws it uniformly from BITE_MIN..BITE_MAX.
     // PLACEHOLDER values; they are calibrated once metabolism exists.
     inline constexpr int BITE_MIN = 10;
     inline constexpr int BITE_MAX = 50;
-
-    static_assert(BITE_MIN >= 1 && BITE_MIN <= BITE_MAX && BITE_MAX <= 65535, "bite range must be ordered and fit in a uint16_t");
 
     // ---- growth (World::applyMove) ----
     // Adding a segment costs GROW_COST energy from the worm's own pool. That energy is destroyed
@@ -75,8 +63,27 @@ namespace Tune {
     inline constexpr int GROW_THRESHOLD_MIN = 30;
     inline constexpr int GROW_THRESHOLD_MAX = 90;
 
+    // ---- metabolism (World::metabolismPhase) ----
+    // Every tick each living worm pays the sum of UPKEEP over its segments out of its own pool.
+    // That energy is destroyed (counted in energyOut). A worm whose energy reaches 0 starves.
+    // Indexed by CellType, one entry per type in enum order (checked by static_assert).
+    // PLACEHOLDER values; they are calibrated in step E5e.
+    //                                   EMPTY HEAD MOVER STOR DEF OFF TAIL
+    inline constexpr int UPKEEP[] = { 0,   1,    0,   0,   0,  1,   0 };
+
+    static_assert(sizeof(ATTACK) / sizeof(ATTACK[0]) == T_COUNT, "ATTACK needs one entry per CellType");
+    static_assert(sizeof(DEFENSE) / sizeof(DEFENSE[0]) == T_COUNT, "DEFENSE needs one entry per CellType");
+    static_assert(sizeof(CAPACITY) / sizeof(CAPACITY[0]) == T_COUNT, "CAPACITY needs one entry per CellType");
+    static_assert(NEWBORN_ENERGY <= CAPACITY[T_HEAD], "a newborn is one head cell and its energy must fit in the capacity");
+    static_assert(FOOD_MAX > 0 && FOOD_MAX <= 65535, "food is stored in a uint16_t");
+    static_assert(FOOD_RATE >= 0, "food rate cannot be negative");
+    static_assert(FOOD_DROP > 0 && FOOD_DROP <= FOOD_MAX, "a drop must fit on a tile");
+    static_assert(FOOD_SEED_PERCENT >= 0 && FOOD_SEED_PERCENT <= 100, "seed percent is 0..100");
+    static_assert(BITE_MIN >= 1 && BITE_MIN <= BITE_MAX && BITE_MAX <= 65535, "bite range must be ordered and fit in a uint16_t");
     static_assert(GROW_COST >= 0, "growth cost cannot be negative");
     static_assert(NEWBORN_ENERGY - GROW_COST >= 1, "a newborn must be able to afford its first segment");
     static_assert(GROW_THRESHOLD_MIN >= 0 && GROW_THRESHOLD_MIN <= GROW_THRESHOLD_MAX && GROW_THRESHOLD_MAX <= 100,
         "growth threshold is a percentage: 0..100 and ordered");
+    static_assert(sizeof(UPKEEP) / sizeof(UPKEEP[0]) == T_COUNT, "UPKEEP needs one entry per CellType");
+    static_assert(NEWBORN_ENERGY > UPKEEP[T_HEAD], "a newborn must survive its first tick");
 }

@@ -9,8 +9,8 @@
 #include "Tuning.h"    // Tune::SEGMENT_HP, SIZE_BONUS, JITTER, ATTACK, DEFENSE
 
 void World::clear() { 
-    grid.clear(); orgs.clear(); 
-    tick = 0; contests = deaths = 0; 
+    grid.clear(); orgs.clear(); tick = 0; 
+    contests = deaths = 0; starvations = 0;
     energyIn = energyOut = 0; 
     foodAccum = 0; energyEaten = 0; 
     segmentsGrown = 0; 
@@ -158,7 +158,27 @@ void World::eatPhase() {
     }
 }
 
+// ------------------------ Metabolism --------------------------
 
+int World::upkeepCost(const Organism& o) const {
+    const int len = int(o.body.size());
+    int sum = 0;
+    for (int i = 0; i < len; ++i) sum += Tune::UPKEEP[o.genome.typeAt(i, len)];
+    return sum;
+}
+
+void World::metabolismPhase() {
+    for (Organism& o : orgs) {
+        if (!o.alive) continue;
+        const int paid = std::min(upkeepCost(o), o.energy);    // cannot pay more than it has
+        o.energy -= paid;
+        energyOut += paid;                                     // upkeep is destroyed (heat)
+        if (o.energy <= 0) {                                   // nothing left: starvation
+            kill(o);                                           // returns 0 energy to the tiles
+            ++starvations;
+        }
+    }
+}
 
 bool World::decide(const Organism& o, uint32_t id, Intent& out) {
     const Genome& g = o.genome;
@@ -262,7 +282,10 @@ void World::step() {
     // 4. EAT: living heads take food from the tile they stand on.
     eatPhase();
 
-    // 5. ENVIRONMENT: new food appears on the ground.
+    // 5. METABOLISM: every living worm pays upkeep; worms with no energy left starve.
+    metabolismPhase();
+
+    // 6. ENVIRONMENT: new food appears on the ground.
     environmentPhase();
     ++tick;
 }
@@ -389,6 +412,8 @@ std::string World::validate() const {
     if (uint64_t(deadCount) != deaths)
         return "deaths counter is " + std::to_string(deaths) +
         " but the number of dead organisms is " + std::to_string(deadCount);
+    if (starvations > deaths)
+        return "starvations counter " + std::to_string(starvations) + " exceeds deaths " + std::to_string(deaths);
 
     // ---- E. energy ledger (I15) ----
     if (energyIn < 0 || energyOut < 0)
